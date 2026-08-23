@@ -46,3 +46,9 @@ captures/
 
 ### Gradle ###
 !gradle/wrapper/gradle-wrapper.jar
+
+### Custom sandbox build ###
+# Signing key — the one thing worth backing up, deliberately not committed.
+/.signing/
+# Finished APKs collected out of the docker build volume.
+/dist/

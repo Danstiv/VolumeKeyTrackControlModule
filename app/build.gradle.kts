@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Local signing key for the custom build, so every rebuild installs over the
+// previous one. Absent for a plain upstream checkout, which then falls back to
+// the default debug key.
+val signingProps = rootProject.file(".signing/keystore.properties").takeIf { it.exists() }
+    ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
     compileSdk = 37
@@ -9,10 +17,23 @@ android {
 
     defaultConfig {
         applicationId = "ru.hepolise.volumekeymusicmanagermodule"
+        applicationIdSuffix = ".custom"
         minSdk = 27
         targetSdk = 37
         versionCode = rootProject.ext["appVersionCode"].toString().toInt()
         versionName = rootProject.ext["appVersionName"].toString()
+        manifestPlaceholders["appLabel"] = "Volume Key Track Control (custom)"
+    }
+
+    signingConfigs {
+        signingProps?.let { props ->
+            create("custom") {
+                storeFile = rootProject.file(".signing/${props.getProperty("storeFile")}")
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -20,6 +41,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles("proguard-rules.pro")
+            signingProps?.let { signingConfig = signingConfigs.getByName("custom") }
+        }
+        debug {
+            signingProps?.let { signingConfig = signingConfigs.getByName("custom") }
         }
     }
 
