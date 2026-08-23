@@ -97,4 +97,6 @@ dependencies {
 
     // RemotePreferences
     implementation("com.crossbowffs.remotepreferences:remotepreferences:0.8")
+
+    testImplementation("junit:junit:4.13.2")
 }

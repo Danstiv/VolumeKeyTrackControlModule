@@ -18,7 +18,8 @@ object SharedPreferencesUtil {
     const val REWIND_ACTION_TYPE = "rewindActionType"
     const val REWIND_DURATION = "rewindDuration"
     const val IS_SWAP_BUTTONS = "isSwapButtons"
-    const val IS_ADD_SECONDARY_ACTION = "isAddSecondaryAction"
+    const val BYPASS_DURATION = "bypassDuration"
+    const val IS_VERBOSE_LOG = "isVerboseLog"
     const val APP_FILTER_TYPE = "appFilterType"
     const val WHITE_LIST_APPS = "whiteListApps"
     const val BLACK_LIST_APPS = "blackListApps"
@@ -33,7 +34,12 @@ object SharedPreferencesUtil {
     val REWIND_ACTION_TYPE_DEFAULT_VALUE = RewindActionType.TRACK_CHANGE
     const val REWIND_DURATION_DEFAULT_VALUE = 5
     const val IS_SWAP_BUTTONS_DEFAULT_VALUE = false
-    const val IS_ADD_SECONDARY_ACTION_DEFAULT_VALUE = false
+    // Kept below two seconds on purpose: the window manager's own volume chord
+    // needs three more seconds after the module hands the keys over, and it has
+    // to win against screen readers that watch the volume keys themselves and
+    // act at around five seconds. Handing over at one second leaves a margin.
+    const val BYPASS_DURATION_DEFAULT_VALUE = 1000
+    const val IS_VERBOSE_LOG_DEFAULT_VALUE = false
     val APP_FILTER_TYPE_DEFAULT_VALUE = AppFilterType.DISABLED.key
 
     const val LAUNCHED_COUNT_DEFAULT_VALUE = -1
@@ -70,9 +76,15 @@ object SharedPreferencesUtil {
         return this?.getInt(REWIND_DURATION, defaultValue) ?: defaultValue
     }
 
-    fun SharedPreferences?.isAddSecondaryAction(): Boolean {
-        val defaultValue = IS_ADD_SECONDARY_ACTION_DEFAULT_VALUE
-        return this?.getBoolean(IS_ADD_SECONDARY_ACTION, defaultValue) ?: defaultValue
+    /** Milliseconds a button is held before the gesture is handed to the system. */
+    fun SharedPreferences?.getBypassDuration(): Int {
+        val defaultValue = BYPASS_DURATION_DEFAULT_VALUE
+        return this?.getInt(BYPASS_DURATION, defaultValue) ?: defaultValue
+    }
+
+    fun SharedPreferences?.isVerboseLog(): Boolean {
+        val defaultValue = IS_VERBOSE_LOG_DEFAULT_VALUE
+        return this?.getBoolean(IS_VERBOSE_LOG, defaultValue) ?: defaultValue
     }
 
     fun SharedPreferences?.isSwapButtons(): Boolean {

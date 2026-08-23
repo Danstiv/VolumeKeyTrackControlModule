@@ -53,13 +53,18 @@
 
     <string name="swap_buttons">Swap Up/Down buttons for skipping</string>
 
+    <string name="bypass_duration">Hand keys to the system after: %dms</string>
+    <string name="bypass_duration_dialog_title">Bypass timeout</string>
+    <string name="bypass_disabled">Never hand keys to the system</string>
+
+    <string name="verbose_log">Verbose logging</string>
+
     <string name="long_press_action">Long press action</string>
     <string name="track_change">Track change</string>
     <string name="rewind">Rewind</string>
     <string name="rewind_duration">Rewind duration: %d sec</string>
     <string name="rewind_duration_dialog_title">Set rewind duration</string>
     <string name="edit_rewind_duration">Edit rewind duration</string>
-    <string name="add_secondary_action">Add secondary action</string>
 
     <string name="settings_reset">Reset settings</string>
     <string name="settings_reset_message">Are you sure you want to reset settings?</string>

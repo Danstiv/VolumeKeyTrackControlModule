@@ -55,13 +55,18 @@
 
     <string name="swap_buttons">Поменять кнопки Вверх/Вниз для переключения</string>
 
+    <string name="bypass_duration">Отдавать кнопки системе через: %dмс</string>
+    <string name="bypass_duration_dialog_title">Таймаут байпаса</string>
+    <string name="bypass_disabled">Не отдавать кнопки системе</string>
+
+    <string name="verbose_log">Подробные логи</string>
+
     <string name="track_change">Переключение</string>
     <string name="long_press_action">Действие при долгом нажатии</string>
     <string name="rewind">Перемотка</string>
     <string name="rewind_duration">Длительность перемотки: %d сек</string>
     <string name="rewind_duration_dialog_title">Установить длительность перемотки</string>
     <string name="edit_rewind_duration">Изменить длительность перемотки</string>
-    <string name="add_secondary_action">Добавить дополнительное действие</string>
 
     <string name="settings_reset">Сбросить настройки</string>
     <string name="settings_reset_message">Вы уверены, что хотите сбросить настройки?</string>

@@ -3,14 +3,11 @@ package ru.hepolise.volumekeytrackcontrol.module.util
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
-import android.hardware.display.DisplayManager
 import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
-import android.os.PowerManager
-import android.view.Display
 import android.view.KeyEvent
 import ru.hepolise.volumekeytrackcontrol.util.AppFilterType
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getAppFilterType
@@ -19,8 +16,6 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getApps
 class MediaSessionManager(private val context: Context) {
     lateinit var audioManager: AudioManager
         private set
-    private lateinit var powerManager: PowerManager
-    private lateinit var displayManager: DisplayManager
     private lateinit var mediaSessionManager: MediaSessionManager
     private lateinit var sessionHelper: Any
     private var mediaControllers: List<MediaController>? = null
@@ -31,8 +26,6 @@ class MediaSessionManager(private val context: Context) {
 
     private fun initManagers() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         mediaSessionManager =
             context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         sessionHelper = getMediaSessionLegacyHelper()
@@ -88,17 +81,6 @@ class MediaSessionManager(private val context: Context) {
 
             else -> false
         }
-    }
-
-    fun isDisplayInteractive(): Boolean {
-        if (!powerManager.isInteractive) return false
-        if (displayManager.displays.size > 1) return true
-        val display = displayManager.displays[0]
-        return display.state !in setOf(
-            Display.STATE_OFF,
-            Display.STATE_DOZE,
-            Display.STATE_DOZE_SUSPEND
-        )
     }
 
     fun adjustStreamVolume(keyCode: Int, handler: Handler) {

@@ -52,3 +52,5 @@ captures/
 /.signing/
 # Finished APKs collected out of the docker build volume.
 /dist/
+# Kotlin build sessions, created in the project root regardless of buildDir.
+/.kotlin/

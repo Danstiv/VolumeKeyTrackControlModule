@@ -9,7 +9,6 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import ru.hepolise.volumekeytrackcontrol.module.util.MediaSessionManager
-import ru.hepolise.volumekeytrackcontrol.module.util.StateManager
 import ru.hepolise.volumekeytrackcontrol.module.util.VolumeKeyHandler
 import ru.hepolise.volumekeytrackcontrol.module.util.getContext
 import ru.hepolise.volumekeytrackcontrol.module.util.getHandler
@@ -23,7 +22,6 @@ class VolumeControlModule : XposedModule() {
             "com.android.server.policy.PhoneWindowManager"
     }
 
-    private lateinit var stateManager: StateManager
     private lateinit var prefs: android.content.SharedPreferences
 
     private var interceptHookHandle: XposedInterface.HookHandle? = null
@@ -68,14 +66,14 @@ class VolumeControlModule : XposedModule() {
             }
         }
 
-        stateManager = StateManager()
         prefs = getRemotePreferences(SETTINGS_PREFS)
+        // Drop the cached runtime so the handler picks up the new preferences.
+        runtime = null
     }
 
     private fun setupHooks(classLoader: ClassLoader) {
         log("Setting up hooks")
 
-        stateManager = StateManager()
         prefs = getRemotePreferences(SETTINGS_PREFS)
 
         interceptHookHandle = hookInterceptKeyBeforeQueueing(classLoader)
@@ -104,6 +102,16 @@ class VolumeControlModule : XposedModule() {
     private fun createInterceptHooker(): XposedInterface.Hooker {
         return XposedInterface.Hooker { chain ->
             val event = chain.args[0] as KeyEvent
+            val policyFlags = chain.args[1] as Int
+
+            // This runs for every key event in the system, so bail out on
+            // anything the module cannot be interested in before doing real work.
+            val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
+                event.keyCode == KeyEvent.KEYCODE_VOLUME_UP
+            val isPowerKey = event.keyCode == KeyEvent.KEYCODE_POWER
+            if (!isVolumeKey && !isPowerKey) {
+                return@Hooker chain.proceed()
+            }
 
             val context = try {
                 chain.getContext()
@@ -113,18 +121,15 @@ class VolumeControlModule : XposedModule() {
                 throw e
             }
 
-            val runtime = chain.getRuntime(context)
-
             try {
-                val volumeKeyHandler = runtime.volumeKeyHandler
-
-                volumeKeyHandler.refreshControllers()
-                if (volumeKeyHandler.shouldIntercept(event)) {
-                    log("Intercepting key event: ${event.keyCode}")
-                    volumeKeyHandler.handleKeyEvent(event)
-                    return@Hooker null
-                } else {
-                    volumeKeyHandler.logInterceptDecision(event)
+                val handler = chain.getRuntime(context).volumeKeyHandler
+                if (isPowerKey) {
+                    // Watched, never consumed: it only signals that a chord is
+                    // being assembled.
+                    handler.handlePowerKey(event.action == KeyEvent.ACTION_DOWN)
+                } else if (handler.handleKeyEvent(event, policyFlags)) {
+                    // Zero flags: neither passed to apps nor handled by the policy.
+                    return@Hooker 0
                 }
             } catch (e: Throwable) {
                 log("Error handling key event: ${e.message}")
@@ -157,7 +162,6 @@ class VolumeControlModule : XposedModule() {
         val volumeKeyHandler = VolumeKeyHandler(
             context = context,
             handler = handler,
-            stateManager = stateManager,
             mediaSessionManager = mediaSessionManager,
             prefs = prefs,
             logger = ::log

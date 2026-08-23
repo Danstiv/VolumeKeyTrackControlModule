@@ -5,277 +5,326 @@ import android.content.SharedPreferences
 import android.media.AudioManager
 import android.media.session.MediaController
 import android.os.Handler
+import android.os.SystemClock
 import android.view.KeyEvent
 import ru.hepolise.volumekeytrackcontrol.module.ExecutionContext
 import ru.hepolise.volumekeytrackcontrol.module.MediaEvent
+import ru.hepolise.volumekeytrackcontrol.module.fsm.ActionTrigger
+import ru.hepolise.volumekeytrackcontrol.module.fsm.Effect
+import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeButton
+import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeKeyStateMachine
 import ru.hepolise.volumekeytrackcontrol.util.RewindActionType
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLongPressDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindActionType
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isAddSecondaryAction
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isSwapButtons
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isVerboseLog
 import ru.hepolise.volumekeytrackcontrol.util.VibratorUtil.getVibrator
 import ru.hepolise.volumekeytrackcontrol.util.VibratorUtil.triggerVibration
+
+private const val REPEAT_TIMEOUT_MS = 400L
+private const val REPEAT_DELAY_MS = 50L
+
+/** Safety net in case a release is ever lost: ~30 s of repeats, then stop. */
+private const val MAX_REPEATS = 600
+
+/** How long a power press is trusted before it is treated as a lost release. */
+private const val POWER_HELD_TIMEOUT_MS = 30_000L
 
 class VolumeKeyHandler(
     private val context: Context,
     private val handler: Handler,
-    private val stateManager: StateManager,
     private val mediaSessionManager: MediaSessionManager,
     private val prefs: SharedPreferences,
     private val logger: (String) -> Unit
 ) {
-    private val pendingRunnables = mutableMapOf<MediaEvent, Runnable>()
-
-    fun refreshControllers() {
-        mediaSessionManager.refreshControllers()
-    }
-
-    private fun logDecision(
-        title: String,
-        keyCode: Int,
-        displayInteractive: Boolean,
-        audioMode: Int,
-        isDownPressed: Boolean,
-        isUpPressed: Boolean,
-        hasPendingEvent: Boolean,
-        controller: MediaController?
-    ) {
-        logger("======== $title ========")
-        logger("audioManager mode: $audioMode, required: ${AudioManager.MODE_NORMAL}")
-        logger("keyCode: $keyCode, required: ${KeyEvent.KEYCODE_VOLUME_DOWN} or ${KeyEvent.KEYCODE_VOLUME_UP}")
-        logger("displayInteractive: $displayInteractive, required: false")
-        logger("isDownPressed: $isDownPressed")
-        logger("isUpPressed: $isUpPressed")
-        logger("hasPendingEvent: $hasPendingEvent")
-        logger("controller: $controller, required: not null")
-        logger("packageName: ${controller?.packageName}")
-        logger("=========================================")
-    }
-
-    fun logInterceptDecision(event: KeyEvent) {
-        val keyCode = event.keyCode
-        if (keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && keyCode != KeyEvent.KEYCODE_VOLUME_UP) return
-
-        val displayInteractive = mediaSessionManager.isDisplayInteractive()
-        val audioMode = mediaSessionManager.audioManager.mode
-        val isDownPressed = stateManager.isDownPressed
-        val isUpPressed = stateManager.isUpPressed
-        val hasPendingEvent = stateManager.pendingEventInfo != null
-        val controller = mediaSessionManager.getActiveMediaController(prefs)
-
-        logDecision(
-            title = "LOG INTERCEPT DECISION",
-            keyCode = keyCode,
-            displayInteractive = displayInteractive,
-            audioMode = audioMode,
-            isDownPressed = isDownPressed,
-            isUpPressed = isUpPressed,
-            hasPendingEvent = hasPendingEvent,
-            controller = controller,
+    private val stateMachine = VolumeKeyStateMachine {
+        VolumeKeyStateMachine.Config(
+            actionDelayMs = prefs.getLongPressDuration().toLong(),
+            bypassDelayMs = prefs.getBypassDuration().toLong()
         )
     }
 
-    fun shouldIntercept(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        if (keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && keyCode != KeyEvent.KEYCODE_VOLUME_UP) return false
+    /** Media session picked when the gesture started; held for its whole duration. */
+    private var gestureController: MediaController? = null
+
+    /** Real presses kept around so injected events can mimic the same device. */
+    private val pressedEvents = mutableMapOf<VolumeButton, KeyEvent>()
+    private val injectedDownTimes = mutableMapOf<VolumeButton, Long>()
+    private val repeatJobs = mutableMapOf<VolumeButton, Runnable>()
+    private val repeatCounts = mutableMapOf<VolumeButton, Int>()
+
+    /**
+     * When the power key went down, or null while it is up. A volume key pressed
+     * while it is held belongs to a chord (screenshot, power menu), not to the
+     * module.
+     */
+    private var powerPressedAt: Long? = null
+
+    /**
+     * Should a power release ever be missed, a stale "held" state would silently
+     * disable the module, so it is only trusted for a while.
+     */
+    private fun isPowerHeld(): Boolean {
+        val pressedAt = powerPressedAt ?: return false
+        if (SystemClock.uptimeMillis() - pressedAt <= POWER_HELD_TIMEOUT_MS) return true
+        logger("Power key looks stuck as held, ignoring it")
+        powerPressedAt = null
+        return false
+    }
+
+    /**
+     * Key events arrive on the input policy thread while timeouts run on the
+     * window manager handler, so every access to the state machine is serialised.
+     */
+    private val timeoutRunnable = Runnable {
+        synchronized(this) {
+            val outcome = stateMachine.onTimeout(SystemClock.uptimeMillis())
+            applyEffects(outcome.effects)
+            rescheduleTimeout()
+        }
+    }
+
+    private fun verbose(message: String) {
+        if (prefs.isVerboseLog()) logger(message)
+    }
+
+    /**
+     * Returns true when the event must be swallowed. Everything before the state
+     * machine is a cheap filter: this runs for every key press in the system, so
+     * the expensive session lookup only happens once, when a gesture starts.
+     */
+    @Synchronized
+    fun handleKeyEvent(event: KeyEvent, policyFlags: Int): Boolean {
+        val button = when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> VolumeButton.UP
+            KeyEvent.KEYCODE_VOLUME_DOWN -> VolumeButton.DOWN
+            else -> return false
+        }
+
+        // Our own injected events: never swallow them again.
+        if (policyFlags and InputInjector.POLICY_FLAG_INJECTED != 0) return false
         if (event.flags and KeyEvent.FLAG_FROM_SYSTEM == 0) return false
 
-        val displayInteractive = mediaSessionManager.isDisplayInteractive()
-        if (displayInteractive) return false
+        val isDown = when (event.action) {
+            KeyEvent.ACTION_DOWN -> true
+            KeyEvent.ACTION_UP -> false
+            else -> return false
+        }
+
+        if (!stateMachine.isActive && !armFor(isDown)) return false
+
+        if (isDown) pressedEvents[button] = KeyEvent(event)
+
+        val outcome = stateMachine.onKey(button, isDown, SystemClock.uptimeMillis())
+        verbose("$button ${if (isDown) "down" else "up"} -> consume=${outcome.consume}, effects=${outcome.effects}")
+        applyEffects(outcome.effects)
+        rescheduleTimeout()
+        if (!stateMachine.isActive) endGesture()
+        return outcome.consume
+    }
+
+    /**
+     * The power key is never consumed; it only tells the module that a chord is
+     * being assembled. A chord is paired by the system only when both keys go
+     * down within a short window, so a gesture already in flight cannot wait for
+     * its bypass deadline and is handed over at once.
+     */
+    @Synchronized
+    fun handlePowerKey(isDown: Boolean) {
+        val wasHeld = powerPressedAt != null
+        powerPressedAt = if (isDown) powerPressedAt ?: SystemClock.uptimeMillis() else null
+        if (!isDown || wasHeld || !stateMachine.isActive) return
+
+        val outcome = stateMachine.bypassNow(SystemClock.uptimeMillis())
+        if (outcome.effects.isEmpty()) return
+
+        logger("Power key pressed, handing the volume keys over for the chord")
+        applyEffects(outcome.effects)
+        rescheduleTimeout()
+    }
+
+    /**
+     * Decides whether a new gesture may start. Only a press can arm the module —
+     * a release without a matching press belongs to the system.
+     */
+    private fun armFor(isDown: Boolean): Boolean {
+        if (!isDown) return false
+
+        if (isPowerHeld()) {
+            verbose("Not arming: power key is held")
+            return false
+        }
+
+        mediaSessionManager.refreshControllers()
 
         val audioMode = mediaSessionManager.audioManager.mode
-        if (audioMode != AudioManager.MODE_NORMAL) return false
-
-        val isDownPressed = stateManager.isDownPressed
-        val isUpPressed = stateManager.isUpPressed
-        val hasPendingEvent = stateManager.pendingEventInfo != null
-
-        val controller = mediaSessionManager.getActiveMediaController(prefs)
-
-        logDecision(
-            title = "NEED HOOK CHECK",
-            keyCode = keyCode,
-            displayInteractive = false,
-            audioMode = audioMode,
-            isDownPressed = isDownPressed,
-            isUpPressed = isUpPressed,
-            hasPendingEvent = hasPendingEvent,
-            controller = controller,
-        )
-
-        return controller != null
-    }
-
-    fun handleKeyEvent(event: KeyEvent) {
-        updateState(event)
-
-        stateManager.pendingEventInfo?.let { pendingInfo ->
-            logger("Executing pending event: ${pendingInfo.event::class.simpleName}")
-            executeEvent(pendingInfo.event, pendingInfo.isPrimary)
-            stateManager.update { pendingEventInfoHolder = PendingEventInfoHolder(null) }
-            return
-        }
-
-        when (event.action) {
-            KeyEvent.ACTION_DOWN -> onPressed(event)
-            KeyEvent.ACTION_UP -> onReleased(event)
-        }
-    }
-
-    private fun updateState(event: KeyEvent) {
-        val pressed = event.action == KeyEvent.ACTION_DOWN
-        val isUp = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP
-        stateManager.update {
-            if (isUp) isUpPressed = pressed else isDownPressed = pressed
-        }
-        if (pressed) {
-            stateManager.update { isLongPress = false }
-        }
-        logger("State updated: down=${stateManager.isDownPressed}, up=${stateManager.isUpPressed}, long=${stateManager.isLongPress}")
-    }
-
-    private fun onPressed(event: KeyEvent) {
-        logger("Volume pressed action received, down: ${stateManager.isDownPressed}, up: ${stateManager.isUpPressed}")
-
-        if (stateManager.isDownPressed && stateManager.isUpPressed) {
-            logger("Both buttons pressed, aborting skip")
-            abortSkip()
-            return
+        if (audioMode != AudioManager.MODE_NORMAL) {
+            verbose("Not arming: audio mode $audioMode")
+            return false
         }
 
         val controller = mediaSessionManager.getActiveMediaController(prefs)
-        if (controller != null && mediaSessionManager.isMusicActive(controller)) {
-            logger("Music is active, creating delayed skip")
-            val primary = resolvePrimaryEvent(event.keyCode)
-            val hasSecondary = getSecondaryEvent(primary) != null
-            scheduleEvent(primary, isPrimary = hasSecondary, hasSecondary = hasSecondary)
-            getSecondaryEvent(primary)?.let { secondary ->
-                logger("Scheduling secondary event: ${secondary::class.simpleName} with delay")
-                scheduleEvent(secondary, isPrimary = false, hasSecondary = false, multiplier = 1.4)
+        if (controller == null) {
+            verbose("Not arming: no media session passes the filter")
+            return false
+        }
+
+        logger("Gesture started, controller: ${controller.packageName}")
+        gestureController = controller
+        return true
+    }
+
+    private fun endGesture() {
+        gestureController = null
+        pressedEvents.clear()
+        injectedDownTimes.clear()
+        VolumeButton.entries.forEach(::stopRepeats)
+        handler.removeCallbacks(timeoutRunnable)
+    }
+
+    private fun rescheduleTimeout() {
+        handler.removeCallbacks(timeoutRunnable)
+        val nextAt = stateMachine.nextTimeoutAt() ?: return
+        val delay = (nextAt - SystemClock.uptimeMillis()).coerceAtLeast(0)
+        handler.postDelayed(timeoutRunnable, delay)
+    }
+
+    private fun applyEffects(effects: List<Effect>) {
+        effects.forEach { effect ->
+            when (effect) {
+                is Effect.RunAction -> runAction(effect.trigger)
+                is Effect.AdjustVolume -> mediaSessionManager.adjustStreamVolume(
+                    keyCodeOf(effect.button),
+                    handler
+                )
+
+                is Effect.InjectDown -> injectDown(effect.button)
+                is Effect.InjectUp -> injectUp(effect.button)
             }
         }
-        logger("Creating delayed play pause")
-        scheduleEvent(MediaEvent.PlayPause, isPrimary = true, hasSecondary = false)
     }
 
-    private fun onReleased(event: KeyEvent) {
-        logger("Volume unpressed action received, down: ${stateManager.isDownPressed}, up: ${stateManager.isUpPressed}")
-        abortAll()
-        val controller = mediaSessionManager.getActiveMediaController(prefs)
-        val isMusicActive = controller != null && mediaSessionManager.isMusicActive(controller)
-        logger("isMusicActive: $isMusicActive")
-        if (!stateManager.isLongPress && isMusicActive) {
-            logger("Adjusting stream volume")
-            mediaSessionManager.adjustStreamVolume(event.keyCode, handler)
+    private fun runAction(trigger: ActionTrigger) {
+        val controller = gestureController
+        if (controller == null) {
+            logger("No controller for $trigger, skipping")
+            return
         }
+
+        val event = resolveEvent(trigger, controller)
+        if (event == null) {
+            verbose("No action configured for $trigger")
+            return
+        }
+
+        context.getVibrator().triggerVibration(prefs)
+        logger("Executing ${event::class.simpleName} for $trigger")
+        event.execute(
+            ExecutionContext(
+                controller = controller,
+                controls = controller.transportControls,
+                prefs = prefs,
+                logger = logger
+            )
+        )
     }
 
-    private fun resolvePrimaryEvent(keyCode: Int): MediaEvent {
-        val isUp = keyCode == KeyEvent.KEYCODE_VOLUME_UP
-        val swapped = prefs.isSwapButtons()
-        val actualIsUp = if (swapped) !isUp else isUp
+    private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? =
+        when (trigger) {
+            ActionTrigger.Both -> MediaEvent.PlayPause
+
+            // Skipping or seeking a session that is not playing is not useful,
+            // so those actions stay tied to active playback.
+            is ActionTrigger.Single ->
+                if (mediaSessionManager.isMusicActive(controller)) {
+                    resolveSingleEvent(trigger.button)
+                } else {
+                    null
+                }
+        }
+
+    private fun resolveSingleEvent(button: VolumeButton): MediaEvent {
+        val isUp = (button == VolumeButton.UP) != prefs.isSwapButtons()
         val isTrackChange = prefs.getRewindActionType() == RewindActionType.TRACK_CHANGE
         return when {
-            isTrackChange && actualIsUp -> MediaEvent.Next
-            isTrackChange && !actualIsUp -> MediaEvent.Prev
-            !isTrackChange && actualIsUp -> MediaEvent.FastForward
+            isTrackChange && isUp -> MediaEvent.Next
+            isTrackChange -> MediaEvent.Prev
+            isUp -> MediaEvent.FastForward
             else -> MediaEvent.Rewind
         }
     }
 
-    private fun getSecondaryEvent(primary: MediaEvent): MediaEvent? {
-        if (!prefs.isAddSecondaryAction()) return null
-        return when (primary) {
-            MediaEvent.Next -> MediaEvent.FastForward
-            MediaEvent.Prev -> MediaEvent.Rewind
-            MediaEvent.FastForward -> MediaEvent.Next
-            MediaEvent.Rewind -> MediaEvent.Prev
-            else -> null
-        }
-    }
-
-    private fun scheduleEvent(
-        event: MediaEvent,
-        isPrimary: Boolean,
-        hasSecondary: Boolean,
-        multiplier: Double = 0.0
-    ) {
-        val delay = (prefs.getLongPressDuration() + multiplier * prefs.getLongPressDuration()
-            .toDouble()).toLong()
-        val runnable = Runnable {
-            onDelayedEvent(event, isPrimary, hasSecondary)
-        }
-        pendingRunnables[event] = runnable
-        handler.postDelayed(runnable, delay)
-        logger("Scheduled event ${event::class.simpleName} (isPrimary=$isPrimary, hasSecondary=$hasSecondary) with delay $delay ms")
-    }
-
-    private fun onDelayedEvent(event: MediaEvent, isPrimary: Boolean, hasSecondary: Boolean) {
-        logger("Delayed event triggered: ${event::class.simpleName}")
-        context.getVibrator().triggerVibration(prefs)
-        stateManager.update { isLongPress = true }
-
-        if (hasSecondary) {
-            logger("Event has secondary, setting as pending")
-            stateManager.update {
-                pendingEventInfoHolder = PendingEventInfoHolder(PendingEventInfo(event, isPrimary))
-            }
-            logger(stateManager.toString())
-        } else {
-            logger("Event has no secondary, executing now")
-            executeEvent(event, isPrimary)
-        }
-    }
-
-    @Synchronized
-    private fun executeEvent(event: MediaEvent, isPrimary: Boolean) {
-        val controller = mediaSessionManager.getActiveMediaController(prefs)
-        if (controller == null) {
-            logger("No active controller, skipping event")
-            return
-        }
-        val executionContext = ExecutionContext(
-            controller = controller,
-            controls = controller.transportControls,
-            prefs = prefs,
-            logger = logger,
-            stateManager = stateManager,
-            isPrimary = isPrimary
-        )
-        logger("Executing event ${event::class.simpleName} with isPrimary=$isPrimary")
-        if (event.execute(executionContext)) {
-            // TODO
-//            runCatching {
-//                RemotePrefsHelper.withRemotePrefs(context) {
-//                    val count = getLaunchedCount()
-//                    edit {
-//                        putInt(LAUNCHED_COUNT, count + 1)
-//                    }
-//                }
-//            }
-            abortAll()
-        }
-    }
-
-    private fun abortSkip() {
-        logger("Aborting skip")
-        abortEvents(MediaEvent.Prev, MediaEvent.Next)
-    }
-
-    private fun abortAll() {
-        logger("Aborting all")
-        stateManager.update { pendingEventInfoHolder = PendingEventInfoHolder(null) }
-        pendingRunnables.values.forEach { handler.removeCallbacks(it) }
-        pendingRunnables.clear()
-    }
-
-    private fun abortEvents(vararg events: MediaEvent) {
-        events.forEach { event ->
-            pendingRunnables[event]?.let {
-                handler.removeCallbacks(it)
-                pendingRunnables.remove(event)
-                logger("Aborted event ${event::class.simpleName}")
+    private fun injectDown(button: VolumeButton) {
+        val source = pressedEvents[button] ?: return
+        val now = SystemClock.uptimeMillis()
+        injectedDownTimes[button] = now
+        val event = InputInjector.buildDown(source, now)
+        logger("Bypassing $button, handing the press to the system")
+        // Never inject from inside the interception path.
+        handler.post {
+            if (!InputInjector.inject(context, event)) {
+                logger("Failed to inject press for $button")
             }
         }
+        startRepeats(button, source, now)
+    }
+
+    private fun injectUp(button: VolumeButton) {
+        val source = pressedEvents[button] ?: return
+        stopRepeats(button)
+        val downTime = injectedDownTimes.remove(button) ?: return
+        val event = InputInjector.buildUp(source, downTime, SystemClock.uptimeMillis())
+        verbose("Closing bypassed $button")
+        handler.post {
+            if (!InputInjector.inject(context, event)) {
+                logger("Failed to inject release for $button")
+            }
+        }
+    }
+
+    /**
+     * Keeps the handed-over press alive as a stream of repeats, the way the input
+     * dispatcher would for a real key. Without it the press reads as a tap: no
+     * volume ramping, and no long-press for anything downstream.
+     */
+    private fun startRepeats(button: VolumeButton, source: KeyEvent, downTime: Long) {
+        stopRepeats(button)
+        repeatCounts[button] = 0
+
+        val job = object : Runnable {
+            override fun run() {
+                synchronized(this@VolumeKeyHandler) {
+                    // The button was released, or the gesture ended under us.
+                    if (repeatJobs[button] !== this) return
+                    val count = (repeatCounts[button] ?: return) + 1
+                    if (count > MAX_REPEATS) {
+                        logger("Repeat limit reached for $button")
+                        stopRepeats(button)
+                        return
+                    }
+                    repeatCounts[button] = count
+
+                    val event = InputInjector.buildRepeat(
+                        source, downTime, SystemClock.uptimeMillis(), count
+                    )
+                    InputInjector.inject(context, event)
+                    handler.postDelayed(this, REPEAT_DELAY_MS)
+                }
+            }
+        }
+
+        repeatJobs[button] = job
+        handler.postDelayed(job, REPEAT_TIMEOUT_MS)
+    }
+
+    private fun stopRepeats(button: VolumeButton) {
+        repeatJobs.remove(button)?.let { handler.removeCallbacks(it) }
+        repeatCounts.remove(button)
+    }
+
+    private fun keyCodeOf(button: VolumeButton) = when (button) {
+        VolumeButton.UP -> KeyEvent.KEYCODE_VOLUME_UP
+        VolumeButton.DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
     }
 }
