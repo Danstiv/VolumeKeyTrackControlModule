@@ -51,7 +51,6 @@
     <string name="long_press_duration">Duration: %dms</string>
     <string name="long_press_duration_dialog_title">Long Press Duration</string>
 
-    <string name="swap_buttons">Swap Up/Down buttons for skipping</string>
 
     <string name="bypass_duration">Hand keys to the system after: %dms</string>
     <string name="bypass_duration_dialog_title">Bypass timeout</string>
@@ -60,8 +59,16 @@
     <string name="verbose_log">Verbose logging</string>
 
     <string name="long_press_action">Long press action</string>
-    <string name="track_change">Track change</string>
-    <string name="rewind">Rewind</string>
+    <string name="action_volume_up">Volume Up:</string>
+    <string name="action_volume_down">Volume Down:</string>
+    <string name="action_both_buttons">Both buttons:</string>
+
+    <string name="action_none">Nothing</string>
+    <string name="action_play_pause">Play / Pause</string>
+    <string name="action_next">Next track</string>
+    <string name="action_previous">Previous track</string>
+    <string name="action_seek_forward">Seek forward</string>
+    <string name="action_seek_backward">Seek backward</string>
     <string name="rewind_duration">Rewind duration: %d sec</string>
     <string name="rewind_duration_dialog_title">Set rewind duration</string>
     <string name="edit_rewind_duration">Edit rewind duration</string>

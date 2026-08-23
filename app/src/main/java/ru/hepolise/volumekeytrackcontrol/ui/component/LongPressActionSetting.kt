@@ -10,15 +10,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,66 +24,57 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import ru.hepolise.volumekeytrackcontrol.R
-import ru.hepolise.volumekeytrackcontrol.util.RewindActionType
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_ACTION_TYPE
+import ru.hepolise.volumekeytrackcontrol.util.ActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_DOWN
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_DURATION
 
-data class RewindSettingData(
-    val rewindActionType: RewindActionType,
+data class ActionSettingData(
+    val actionMap: ActionMap,
     val rewindDuration: Int
 )
 
 @Composable
 fun LongPressActionSetting(
-    data: RewindSettingData,
+    data: ActionSettingData,
     sharedPreferences: SharedPreferences,
-    onValueChange: (RewindSettingData) -> Unit
+    onValueChange: (ActionSettingData) -> Unit
 ) {
-    val rewindActionType = data.rewindActionType
+    val actionMap = data.actionMap
     val rewindDuration = data.rewindDuration
 
     var showRewindDurationDialog by remember { mutableStateOf(false) }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        SingleChoiceSegmentedButtonRow {
-            RewindActionType.entries.forEachIndexed { index, actionType ->
-                SegmentedButton(
-                    selected = rewindActionType == actionType,
-                    onClick = {
-                        onValueChange(data.copy(rewindActionType = actionType))
-                        sharedPreferences.edit {
-                            putString(REWIND_ACTION_TYPE, actionType.name)
-                        }
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = RewindActionType.entries.size
-                    ),
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 140.dp)
-                        .weight(1f)
-                ) {
-                    Text(
-                        text = when (actionType) {
-                            RewindActionType.TRACK_CHANGE -> stringResource(R.string.track_change)
-                            RewindActionType.REWIND -> stringResource(R.string.rewind)
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Visible,
-                        softWrap = false
-                    )
-                }
-            }
-        }
+    ActionSelector(
+        label = stringResource(R.string.action_volume_up),
+        value = actionMap.up
+    ) { action ->
+        onValueChange(data.copy(actionMap = actionMap.copy(up = action)))
+        sharedPreferences.edit { putString(ACTION_VOLUME_UP, action.key) }
+    }
+
+    ActionSelector(
+        label = stringResource(R.string.action_volume_down),
+        value = actionMap.down
+    ) { action ->
+        onValueChange(data.copy(actionMap = actionMap.copy(down = action)))
+        sharedPreferences.edit { putString(ACTION_VOLUME_DOWN, action.key) }
+    }
+
+    ActionSelector(
+        label = stringResource(R.string.action_both_buttons),
+        value = actionMap.both
+    ) { action ->
+        onValueChange(data.copy(actionMap = actionMap.copy(both = action)))
+        sharedPreferences.edit { putString(ACTION_BOTH_BUTTONS, action.key) }
     }
 
     Box {
         AnimatedVisibility(
-            visible = rewindActionType == RewindActionType.REWIND,
+            visible = actionMap.usesSeekDuration,
             enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
             exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
             modifier = Modifier.fillMaxWidth()

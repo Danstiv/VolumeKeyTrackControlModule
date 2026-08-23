@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -88,22 +87,21 @@ import ru.hepolise.volumekeytrackcontrol.ui.component.BypassSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.LongPressActionSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.LongPressSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.ModuleInfoCard
-import ru.hepolise.volumekeytrackcontrol.ui.component.RewindSettingData
-import ru.hepolise.volumekeytrackcontrol.ui.component.SwapButtonsSetting
+import ru.hepolise.volumekeytrackcontrol.ui.component.ActionSettingData
 import ru.hepolise.volumekeytrackcontrol.ui.component.VerboseLogSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.VibrationEffectSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.VibrationSettingData
 import ru.hepolise.volumekeytrackcontrol.util.AppFilterType
 import ru.hepolise.volumekeytrackcontrol.util.Constants
-import ru.hepolise.volumekeytrackcontrol.util.RewindActionType
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.APP_FILTER_TYPE_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.EFFECT_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.BYPASS_DURATION_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.IS_VERBOSE_LOG_DEFAULT_VALUE
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.IS_SWAP_BUTTONS_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.LONG_PRESS_DURATION_DEFAULT_VALUE
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_ACTION_TYPE
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_ACTION_TYPE_DEFAULT_VALUE
+import ru.hepolise.volumekeytrackcontrol.util.ActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS_DEFAULT_VALUE
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_DOWN_DEFAULT_VALUE
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_DURATION_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.VIBRATION_AMPLITUDE_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.VIBRATION_LENGTH_DEFAULT_VALUE
@@ -111,14 +109,13 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getAppFilter
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLaunchedCount
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLongPressDuration
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindActionType
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getSettingsSharedPreferences
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getStatusSharedPreferences
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getVibrationAmplitude
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getVibrationLength
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getVibrationType
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isSwapButtons
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isVerboseLog
 import ru.hepolise.volumekeytrackcontrol.util.VibrationType
 
@@ -139,7 +136,7 @@ fun SettingsScreen(
     val settingsPrefs = xposedService?.getSettingsSharedPreferences()
 
     var longPressDuration by remember { mutableIntStateOf(settingsPrefs.getLongPressDuration()) }
-    var rewindActionType by remember { mutableStateOf(settingsPrefs.getRewindActionType()) }
+    var actionMap by remember { mutableStateOf(settingsPrefs.getActionMap()) }
     var rewindDuration by remember { mutableIntStateOf(settingsPrefs.getRewindDuration()) }
     var bypassDuration by remember { mutableIntStateOf(settingsPrefs.getBypassDuration()) }
     var isVerboseLog by remember { mutableStateOf(settingsPrefs.isVerboseLog()) }
@@ -147,7 +144,6 @@ fun SettingsScreen(
     var vibrationType by remember { mutableStateOf(settingsPrefs.getVibrationType()) }
     var vibrationLength by remember { mutableIntStateOf(settingsPrefs.getVibrationLength()) }
     var vibrationAmplitude by remember { mutableIntStateOf(settingsPrefs.getVibrationAmplitude()) }
-    var isSwapButtons by remember { mutableStateOf(settingsPrefs.isSwapButtons()) }
     var appFilterType by remember { mutableStateOf(settingsPrefs.getAppFilterType()) }
     var showResetSettingsDialog by remember { mutableStateOf(false) }
 
@@ -163,20 +159,6 @@ fun SettingsScreen(
         statusPrefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose {
             statusPrefs.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }
-
-    settingsPrefs?.also {
-        DisposableEffect(Unit) {
-            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                if (key == REWIND_ACTION_TYPE) {
-                    rewindActionType = settingsPrefs.getRewindActionType()
-                }
-            }
-            settingsPrefs.registerOnSharedPreferenceChangeListener(listener)
-            onDispose {
-                settingsPrefs.unregisterOnSharedPreferenceChangeListener(listener)
-            }
         }
     }
 
@@ -243,12 +225,6 @@ fun SettingsScreen(
                     ) {
                         longPressDuration = it
                     }
-                    SwapButtonsSetting(
-                        isSwapButtons = isSwapButtons,
-                        sharedPreferences = settingsPrefs
-                    ) {
-                        isSwapButtons = it
-                    }
                     BypassSetting(
                         bypassDuration = bypassDuration,
                         sharedPreferences = settingsPrefs
@@ -258,19 +234,16 @@ fun SettingsScreen(
                 }
 
                 SettingsCard(
-                    icon = when (rewindActionType) {
-                        RewindActionType.TRACK_CHANGE -> Icons.Default.SkipNext
-                        RewindActionType.REWIND -> Icons.Default.FastForward
-                    },
+                    icon = Icons.Default.SkipNext,
                     title = stringResource(R.string.long_press_action)
                 ) {
                     LongPressActionSetting(
-                        RewindSettingData(
-                            rewindActionType,
+                        ActionSettingData(
+                            actionMap,
                             rewindDuration
                         ), settingsPrefs
                     ) {
-                        rewindActionType = it.rewindActionType
+                        actionMap = it.actionMap
                         rewindDuration = it.rewindDuration
                     }
                 }
@@ -330,9 +303,12 @@ fun SettingsScreen(
                                 vibrationLength = VIBRATION_LENGTH_DEFAULT_VALUE
                                 vibrationAmplitude = VIBRATION_AMPLITUDE_DEFAULT_VALUE
                                 longPressDuration = LONG_PRESS_DURATION_DEFAULT_VALUE
-                                rewindActionType = REWIND_ACTION_TYPE_DEFAULT_VALUE
+                                actionMap = ActionMap(
+                                    up = ACTION_VOLUME_UP_DEFAULT_VALUE,
+                                    down = ACTION_VOLUME_DOWN_DEFAULT_VALUE,
+                                    both = ACTION_BOTH_BUTTONS_DEFAULT_VALUE
+                                )
                                 rewindDuration = REWIND_DURATION_DEFAULT_VALUE
-                                isSwapButtons = IS_SWAP_BUTTONS_DEFAULT_VALUE
                                 bypassDuration = BYPASS_DURATION_DEFAULT_VALUE
                                 isVerboseLog = IS_VERBOSE_LOG_DEFAULT_VALUE
                                 appFilterType = AppFilterType.fromKey(

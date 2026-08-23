@@ -53,17 +53,22 @@
     <string name="long_press_duration">Длительность: %d мс</string>
     <string name="long_press_duration_dialog_title">Длительность долгого нажатия</string>
 
-    <string name="swap_buttons">Поменять кнопки Вверх/Вниз для переключения</string>
-
     <string name="bypass_duration">Отдавать кнопки системе через: %dмс</string>
     <string name="bypass_duration_dialog_title">Таймаут байпаса</string>
     <string name="bypass_disabled">Не отдавать кнопки системе</string>
 
     <string name="verbose_log">Подробные логи</string>
-
-    <string name="track_change">Переключение</string>
     <string name="long_press_action">Действие при долгом нажатии</string>
-    <string name="rewind">Перемотка</string>
+    <string name="action_volume_up">Громкость вверх:</string>
+    <string name="action_volume_down">Громкость вниз:</string>
+    <string name="action_both_buttons">Обе кнопки:</string>
+
+    <string name="action_none">Ничего</string>
+    <string name="action_play_pause">Воспроизведение / пауза</string>
+    <string name="action_next">Следующий трек</string>
+    <string name="action_previous">Предыдущий трек</string>
+    <string name="action_seek_forward">Перемотка вперёд</string>
+    <string name="action_seek_backward">Перемотка назад</string>
     <string name="rewind_duration">Длительность перемотки: %d сек</string>
     <string name="rewind_duration_dialog_title">Установить длительность перемотки</string>
     <string name="edit_rewind_duration">Изменить длительность перемотки</string>

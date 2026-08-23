@@ -15,9 +15,10 @@ object SharedPreferencesUtil {
     const val VIBRATION_LENGTH = "vibrationLength"
     const val VIBRATION_AMPLITUDE = "vibrationAmplitude"
     const val LONG_PRESS_DURATION = "longPressDuration"
-    const val REWIND_ACTION_TYPE = "rewindActionType"
+    const val ACTION_VOLUME_UP = "actionVolumeUp"
+    const val ACTION_VOLUME_DOWN = "actionVolumeDown"
+    const val ACTION_BOTH_BUTTONS = "actionBothButtons"
     const val REWIND_DURATION = "rewindDuration"
-    const val IS_SWAP_BUTTONS = "isSwapButtons"
     const val BYPASS_DURATION = "bypassDuration"
     const val IS_VERBOSE_LOG = "isVerboseLog"
     const val APP_FILTER_TYPE = "appFilterType"
@@ -31,9 +32,10 @@ object SharedPreferencesUtil {
     const val VIBRATION_LENGTH_DEFAULT_VALUE = 50
     const val VIBRATION_AMPLITUDE_DEFAULT_VALUE = 128
     val LONG_PRESS_DURATION_DEFAULT_VALUE = ViewConfiguration.getLongPressTimeout()
-    val REWIND_ACTION_TYPE_DEFAULT_VALUE = RewindActionType.TRACK_CHANGE
+    val ACTION_VOLUME_UP_DEFAULT_VALUE = KeyAction.NEXT
+    val ACTION_VOLUME_DOWN_DEFAULT_VALUE = KeyAction.PREVIOUS
+    val ACTION_BOTH_BUTTONS_DEFAULT_VALUE = KeyAction.PLAY_PAUSE
     const val REWIND_DURATION_DEFAULT_VALUE = 5
-    const val IS_SWAP_BUTTONS_DEFAULT_VALUE = false
     // Kept below two seconds on purpose: the window manager's own volume chord
     // needs three more seconds after the module hands the keys over, and it has
     // to win against screen readers that watch the volume keys themselves and
@@ -64,12 +66,14 @@ object SharedPreferencesUtil {
         return this?.getInt(LONG_PRESS_DURATION, defaultValue) ?: defaultValue
     }
 
-    fun SharedPreferences?.getRewindActionType(): RewindActionType {
-        val defaultValue = REWIND_ACTION_TYPE_DEFAULT_VALUE.name
-        return RewindActionType.valueOf(
-            this?.getString(REWIND_ACTION_TYPE, defaultValue) ?: defaultValue
-        )
-    }
+    fun SharedPreferences?.getAction(key: String, defaultValue: KeyAction): KeyAction =
+        KeyAction.fromKey(this?.getString(key, defaultValue.key), defaultValue)
+
+    fun SharedPreferences?.getActionMap(): ActionMap = ActionMap(
+        up = getAction(ACTION_VOLUME_UP, ACTION_VOLUME_UP_DEFAULT_VALUE),
+        down = getAction(ACTION_VOLUME_DOWN, ACTION_VOLUME_DOWN_DEFAULT_VALUE),
+        both = getAction(ACTION_BOTH_BUTTONS, ACTION_BOTH_BUTTONS_DEFAULT_VALUE)
+    )
 
     fun SharedPreferences?.getRewindDuration(): Int {
         val defaultValue = REWIND_DURATION_DEFAULT_VALUE
@@ -85,11 +89,6 @@ object SharedPreferencesUtil {
     fun SharedPreferences?.isVerboseLog(): Boolean {
         val defaultValue = IS_VERBOSE_LOG_DEFAULT_VALUE
         return this?.getBoolean(IS_VERBOSE_LOG, defaultValue) ?: defaultValue
-    }
-
-    fun SharedPreferences?.isSwapButtons(): Boolean {
-        val defaultValue = IS_SWAP_BUTTONS_DEFAULT_VALUE
-        return this?.getBoolean(IS_SWAP_BUTTONS, defaultValue) ?: defaultValue
     }
 
     fun SharedPreferences?.getAppFilterType(): AppFilterType {

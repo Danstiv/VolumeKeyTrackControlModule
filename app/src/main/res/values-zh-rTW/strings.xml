@@ -47,12 +47,7 @@
 
     <string name="long_press_duration">時長：%d毫秒</string>
     <string name="long_press_duration_dialog_title">長按時長</string>
-
-    <string name="swap_buttons">交換上下曲按鈕</string>
-
-    <string name="track_change">切換曲目</string>
     <string name="long_press_action">長按動作</string>
-    <string name="rewind">倒轉</string>
     <string name="rewind_duration">倒轉時長：%d 秒</string>
     <string name="rewind_duration_dialog_title">設定倒轉時長</string>
     <string name="edit_rewind_duration">編輯倒轉時長</string>

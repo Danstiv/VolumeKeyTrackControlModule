@@ -13,11 +13,10 @@ import ru.hepolise.volumekeytrackcontrol.module.fsm.ActionTrigger
 import ru.hepolise.volumekeytrackcontrol.module.fsm.Effect
 import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeButton
 import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeKeyStateMachine
-import ru.hepolise.volumekeytrackcontrol.util.RewindActionType
+import ru.hepolise.volumekeytrackcontrol.util.KeyAction
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLongPressDuration
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindActionType
-import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isSwapButtons
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isVerboseLog
 import ru.hepolise.volumekeytrackcontrol.util.VibratorUtil.getVibrator
 import ru.hepolise.volumekeytrackcontrol.util.VibratorUtil.triggerVibration
@@ -112,7 +111,7 @@ class VolumeKeyHandler(
             else -> return false
         }
 
-        if (!stateMachine.isActive && !armFor(isDown)) return false
+        if (!stateMachine.isActive && !armFor(isDown, button)) return false
 
         if (isDown) pressedEvents[button] = KeyEvent(event)
 
@@ -148,8 +147,15 @@ class VolumeKeyHandler(
      * Decides whether a new gesture may start. Only a press can arm the module —
      * a release without a matching press belongs to the system.
      */
-    private fun armFor(isDown: Boolean): Boolean {
+    private fun armFor(isDown: Boolean, button: VolumeButton): Boolean {
         if (!isDown) return false
+
+        // Nothing is bound to this button, so there is no reason to take it:
+        // left alone it keeps behaving like an untouched volume key.
+        if (prefs.getActionMap().isIdle(button)) {
+            verbose("Not arming: nothing is bound to $button")
+            return false
+        }
 
         if (isPowerHeld()) {
             verbose("Not arming: power key is held")
@@ -230,28 +236,23 @@ class VolumeKeyHandler(
         )
     }
 
-    private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? =
-        when (trigger) {
-            ActionTrigger.Both -> MediaEvent.PlayPause
+    private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? {
+        val action = prefs.getActionMap().forTrigger(trigger)
 
-            // Skipping or seeking a session that is not playing is not useful,
-            // so those actions stay tied to active playback.
-            is ActionTrigger.Single ->
-                if (mediaSessionManager.isMusicActive(controller)) {
-                    resolveSingleEvent(trigger.button)
-                } else {
-                    null
-                }
+        // Skipping or seeking a session that is not playing is not useful, so
+        // those actions stay tied to active playback. Play/pause is the point
+        // when nothing is playing, so it always applies.
+        if (action != KeyAction.PLAY_PAUSE && !mediaSessionManager.isMusicActive(controller)) {
+            return null
         }
 
-    private fun resolveSingleEvent(button: VolumeButton): MediaEvent {
-        val isUp = (button == VolumeButton.UP) != prefs.isSwapButtons()
-        val isTrackChange = prefs.getRewindActionType() == RewindActionType.TRACK_CHANGE
-        return when {
-            isTrackChange && isUp -> MediaEvent.Next
-            isTrackChange -> MediaEvent.Prev
-            isUp -> MediaEvent.FastForward
-            else -> MediaEvent.Rewind
+        return when (action) {
+            KeyAction.NONE -> null
+            KeyAction.PLAY_PAUSE -> MediaEvent.PlayPause
+            KeyAction.NEXT -> MediaEvent.Next
+            KeyAction.PREVIOUS -> MediaEvent.Prev
+            KeyAction.SEEK_FORWARD -> MediaEvent.FastForward
+            KeyAction.SEEK_BACKWARD -> MediaEvent.Rewind
         }
     }
 
