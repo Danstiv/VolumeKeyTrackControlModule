@@ -53,6 +53,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    testOptions {
+        unitTests {
+            // SharedPreferencesUtil reads framework defaults (ViewConfiguration,
+            // Build.VERSION) while initialising; without this they throw on the JVM.
+            isReturnDefaultValues = true
+        }
+    }
+
     namespace = "ru.hepolise.volumekeytrackcontrol"
     buildFeatures {
         buildConfig = true

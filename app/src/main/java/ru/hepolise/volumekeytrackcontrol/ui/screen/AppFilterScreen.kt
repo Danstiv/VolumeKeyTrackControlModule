@@ -502,7 +502,7 @@ fun AppFilterScreen(
 }
 
 @Composable
-private fun AppIcon(bitmap: Bitmap?, contentDescription: String) {
+internal fun AppIcon(bitmap: Bitmap?, contentDescription: String) {
     AsyncImage(
         model = bitmap,
         contentDescription = contentDescription,

@@ -5,6 +5,7 @@ import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
 import android.os.Build
 import android.view.ViewConfiguration
+import androidx.core.content.edit
 import io.github.libxposed.service.XposedService
 
 object SharedPreferencesUtil {
@@ -21,6 +22,7 @@ object SharedPreferencesUtil {
     const val REWIND_DURATION = "rewindDuration"
     const val BYPASS_DURATION = "bypassDuration"
     const val IS_VERBOSE_LOG = "isVerboseLog"
+    const val PROFILE_APPS = "profileApps"
     const val APP_FILTER_TYPE = "appFilterType"
     const val WHITE_LIST_APPS = "whiteListApps"
     const val BLACK_LIST_APPS = "blackListApps"
@@ -69,11 +71,58 @@ object SharedPreferencesUtil {
     fun SharedPreferences?.getAction(key: String, defaultValue: KeyAction): KeyAction =
         KeyAction.fromKey(this?.getString(key, defaultValue.key), defaultValue)
 
-    fun SharedPreferences?.getActionMap(): ActionMap = ActionMap(
-        up = getAction(ACTION_VOLUME_UP, ACTION_VOLUME_UP_DEFAULT_VALUE),
-        down = getAction(ACTION_VOLUME_DOWN, ACTION_VOLUME_DOWN_DEFAULT_VALUE),
-        both = getAction(ACTION_BOTH_BUTTONS, ACTION_BOTH_BUTTONS_DEFAULT_VALUE)
-    )
+    /** Packages that have an action profile of their own. */
+    fun SharedPreferences?.getProfileApps(): Set<String> =
+        this?.getStringSet(PROFILE_APPS, emptySet()) ?: emptySet()
+
+    fun SharedPreferences?.hasProfile(packageName: String): Boolean =
+        packageName in getProfileApps()
+
+    private fun profileKey(packageName: String, key: String) = "profile.$packageName.$key"
+
+    /**
+     * The actions in effect for [packageName] — the app owning the media session
+     * the gesture is about. Without a profile, or for slots a profile does not
+     * define, the global configuration applies.
+     */
+    fun SharedPreferences?.getActionMap(packageName: String? = null): ActionMap {
+        val global = ActionMap(
+            up = getAction(ACTION_VOLUME_UP, ACTION_VOLUME_UP_DEFAULT_VALUE),
+            down = getAction(ACTION_VOLUME_DOWN, ACTION_VOLUME_DOWN_DEFAULT_VALUE),
+            both = getAction(ACTION_BOTH_BUTTONS, ACTION_BOTH_BUTTONS_DEFAULT_VALUE)
+        )
+        if (packageName == null || !hasProfile(packageName)) return global
+
+        return ActionMap(
+            up = getAction(profileKey(packageName, ACTION_VOLUME_UP), global.up),
+            down = getAction(profileKey(packageName, ACTION_VOLUME_DOWN), global.down),
+            both = getAction(profileKey(packageName, ACTION_BOTH_BUTTONS), global.both)
+        )
+    }
+
+    /** Seeds a profile from the global configuration so every slot starts defined. */
+    fun SharedPreferences.createProfile(packageName: String) {
+        val global = getActionMap()
+        edit {
+            putStringSet(PROFILE_APPS, getProfileApps() + packageName)
+            putString(profileKey(packageName, ACTION_VOLUME_UP), global.up.key)
+            putString(profileKey(packageName, ACTION_VOLUME_DOWN), global.down.key)
+            putString(profileKey(packageName, ACTION_BOTH_BUTTONS), global.both.key)
+        }
+    }
+
+    fun SharedPreferences.setProfileAction(packageName: String, key: String, action: KeyAction) {
+        edit { putString(profileKey(packageName, key), action.key) }
+    }
+
+    fun SharedPreferences.deleteProfile(packageName: String) {
+        edit {
+            putStringSet(PROFILE_APPS, getProfileApps() - packageName)
+            remove(profileKey(packageName, ACTION_VOLUME_UP))
+            remove(profileKey(packageName, ACTION_VOLUME_DOWN))
+            remove(profileKey(packageName, ACTION_BOTH_BUTTONS))
+        }
+    }
 
     fun SharedPreferences?.getRewindDuration(): Int {
         val defaultValue = REWIND_DURATION_DEFAULT_VALUE

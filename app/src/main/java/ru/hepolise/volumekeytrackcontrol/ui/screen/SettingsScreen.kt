@@ -235,7 +235,9 @@ fun SettingsScreen(
 
                 SettingsCard(
                     icon = Icons.Default.SkipNext,
-                    title = stringResource(R.string.long_press_action)
+                    title = stringResource(R.string.long_press_action),
+                    showAction = true,
+                    onActionClick = { navController?.navigate("appProfiles") }
                 ) {
                     LongPressActionSetting(
                         ActionSettingData(

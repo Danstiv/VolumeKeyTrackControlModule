@@ -69,6 +69,12 @@
     <string name="action_previous">Предыдущий трек</string>
     <string name="action_seek_forward">Перемотка вперёд</string>
     <string name="action_seek_backward">Перемотка назад</string>
+
+    <string name="app_profiles">Действия по приложениям</string>
+    <string name="app_profiles_empty">Приложения не настроены. Добавьте приложение, чтобы задать ему свои действия; для остальных действуют настройки выше.</string>
+    <string name="add_app">Добавить приложение</string>
+    <string name="delete_profile">Удалить профиль</string>
+    <string name="delete_profile_message">Удалить профиль для %1$s? Приложение вернётся к общим действиям.</string>
     <string name="rewind_duration">Длительность перемотки: %d сек</string>
     <string name="rewind_duration_dialog_title">Установить длительность перемотки</string>
     <string name="edit_rewind_duration">Изменить длительность перемотки</string>

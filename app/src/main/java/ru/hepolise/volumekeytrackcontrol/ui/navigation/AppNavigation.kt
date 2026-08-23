@@ -12,6 +12,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import ru.hepolise.volumekeytrackcontrol.ui.LocalXposedService
 import ru.hepolise.volumekeytrackcontrol.ui.screen.AppFilterScreen
+import ru.hepolise.volumekeytrackcontrol.ui.screen.AppProfilePickerScreen
+import ru.hepolise.volumekeytrackcontrol.ui.screen.AppProfileScreen
+import ru.hepolise.volumekeytrackcontrol.ui.screen.AppProfilesScreen
 import ru.hepolise.volumekeytrackcontrol.ui.screen.SettingsScreen
 import ru.hepolise.volumekeytrackcontrol.util.AppFilterType
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getSettingsSharedPreferences
@@ -59,6 +62,28 @@ fun AppNavigation(
                 )
                 AppFilterScreen(
                     filterType = filterType,
+                    sharedPreferences = sharedPreferences,
+                    navController = navController
+                )
+            }
+
+            composable(route = "appProfiles") {
+                AppProfilesScreen(
+                    sharedPreferences = sharedPreferences,
+                    navController = navController
+                )
+            }
+
+            composable(route = "appProfilePicker") {
+                AppProfilePickerScreen(
+                    sharedPreferences = sharedPreferences,
+                    navController = navController
+                )
+            }
+
+            composable(route = "appProfile/{packageName}") { backStackEntry ->
+                AppProfileScreen(
+                    packageName = backStackEntry.arguments?.getString("packageName").orEmpty(),
                     sharedPreferences = sharedPreferences,
                     navController = navController
                 )

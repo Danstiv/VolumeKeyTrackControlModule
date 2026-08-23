@@ -13,6 +13,7 @@ import ru.hepolise.volumekeytrackcontrol.module.fsm.ActionTrigger
 import ru.hepolise.volumekeytrackcontrol.module.fsm.Effect
 import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeButton
 import ru.hepolise.volumekeytrackcontrol.module.fsm.VolumeKeyStateMachine
+import ru.hepolise.volumekeytrackcontrol.util.ActionMap
 import ru.hepolise.volumekeytrackcontrol.util.KeyAction
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDuration
@@ -44,8 +45,13 @@ class VolumeKeyHandler(
         )
     }
 
-    /** Media session picked when the gesture started; held for its whole duration. */
+    /**
+     * Media session picked when the gesture started, and the actions configured
+     * for the app owning it. Both are held for the whole gesture, so a session
+     * appearing or a setting changing mid-press cannot alter it.
+     */
     private var gestureController: MediaController? = null
+    private var gestureActionMap: ActionMap? = null
 
     /** Real presses kept around so injected events can mimic the same device. */
     private val pressedEvents = mutableMapOf<VolumeButton, KeyEvent>()
@@ -150,13 +156,6 @@ class VolumeKeyHandler(
     private fun armFor(isDown: Boolean, button: VolumeButton): Boolean {
         if (!isDown) return false
 
-        // Nothing is bound to this button, so there is no reason to take it:
-        // left alone it keeps behaving like an untouched volume key.
-        if (prefs.getActionMap().isIdle(button)) {
-            verbose("Not arming: nothing is bound to $button")
-            return false
-        }
-
         if (isPowerHeld()) {
             verbose("Not arming: power key is held")
             return false
@@ -176,13 +175,24 @@ class VolumeKeyHandler(
             return false
         }
 
-        logger("Gesture started, controller: ${controller.packageName}")
+        // Which actions apply depends on the app owning the session, so the
+        // session has to be resolved before it is known whether this button
+        // does anything at all.
+        val actionMap = prefs.getActionMap(controller.packageName)
+        if (actionMap.isIdle(button)) {
+            verbose("Not arming: nothing is bound to $button for ${controller.packageName}")
+            return false
+        }
+
+        logger("Gesture started, controller: ${controller.packageName}, actions: $actionMap")
         gestureController = controller
+        gestureActionMap = actionMap
         return true
     }
 
     private fun endGesture() {
         gestureController = null
+        gestureActionMap = null
         pressedEvents.clear()
         injectedDownTimes.clear()
         VolumeButton.entries.forEach(::stopRepeats)
@@ -237,7 +247,7 @@ class VolumeKeyHandler(
     }
 
     private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? {
-        val action = prefs.getActionMap().forTrigger(trigger)
+        val action = (gestureActionMap ?: prefs.getActionMap()).forTrigger(trigger)
 
         // Skipping or seeking a session that is not playing is not useful, so
         // those actions stay tied to active playback. Play/pause is the point
