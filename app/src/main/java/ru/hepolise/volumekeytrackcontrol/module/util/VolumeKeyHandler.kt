@@ -39,9 +39,13 @@ class VolumeKeyHandler(
     private val logger: (String) -> Unit
 ) {
     private val stateMachine = VolumeKeyStateMachine {
+        val actions = gestureActionMap ?: prefs.getActionMap()
         VolumeKeyStateMachine.Config(
             actionDelayMs = prefs.getLongPressDuration().toLong(),
-            bypassDelayMs = prefs.getBypassDuration().toLong()
+            bypassDelayMs = prefs.getBypassDuration().toLong(),
+            boundUp = actions.up != KeyAction.NONE,
+            boundDown = actions.down != KeyAction.NONE,
+            boundBoth = actions.both != KeyAction.NONE
         )
     }
 
@@ -178,7 +182,7 @@ class VolumeKeyHandler(
         // Which actions apply depends on the app owning the session, so the
         // session has to be resolved before it is known whether this button
         // does anything at all.
-        val actionMap = prefs.getActionMap(controller.packageName)
+        val actionMap = prefs.getActionMap(controller.packageName).applicableTo(controller)
         if (actionMap.isIdle(button)) {
             verbose("Not arming: nothing is bound to $button for ${controller.packageName}")
             return false
@@ -246,17 +250,23 @@ class VolumeKeyHandler(
         )
     }
 
-    private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? {
-        val action = (gestureActionMap ?: prefs.getActionMap()).forTrigger(trigger)
+    /**
+     * Blanks out the actions that cannot do anything for this session, so that
+     * everything downstream — whether a button is taken at all, and how long it
+     * is held before being handed back — works off what will really happen.
+     * Skipping or seeking a session that is not playing is not useful; play or
+     * pause is exactly the point when nothing is playing, so it always applies.
+     */
+    private fun ActionMap.applicableTo(controller: MediaController): ActionMap {
+        if (mediaSessionManager.isMusicActive(controller)) return this
+        fun applicable(action: KeyAction) =
+            if (action == KeyAction.PLAY_PAUSE) action else KeyAction.NONE
+        return ActionMap(applicable(up), applicable(down), applicable(both))
+    }
 
-        // Skipping or seeking a session that is not playing is not useful, so
-        // those actions stay tied to active playback. Play/pause is the point
-        // when nothing is playing, so it always applies.
-        if (action != KeyAction.PLAY_PAUSE && !mediaSessionManager.isMusicActive(controller)) {
-            return null
-        }
-
-        return when (action) {
+    private fun resolveEvent(trigger: ActionTrigger, controller: MediaController): MediaEvent? =
+        when ((gestureActionMap ?: prefs.getActionMap().applicableTo(controller))
+            .forTrigger(trigger)) {
             KeyAction.NONE -> null
             KeyAction.PLAY_PAUSE -> MediaEvent.PlayPause
             KeyAction.NEXT -> MediaEvent.Next
@@ -264,7 +274,6 @@ class VolumeKeyHandler(
             KeyAction.SEEK_FORWARD -> MediaEvent.FastForward
             KeyAction.SEEK_BACKWARD -> MediaEvent.Rewind
         }
-    }
 
     private fun injectDown(button: VolumeButton) {
         val source = pressedEvents[button] ?: return

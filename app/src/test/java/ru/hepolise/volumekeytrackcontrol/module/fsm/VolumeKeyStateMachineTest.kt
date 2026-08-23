@@ -15,10 +15,13 @@ private const val BYPASS_DELAY = 2000L
  */
 private class Fixture(
     actionDelay: Long = ACTION_DELAY,
-    bypassDelay: Long = BYPASS_DELAY
+    bypassDelay: Long = BYPASS_DELAY,
+    boundUp: Boolean = true,
+    boundDown: Boolean = true,
+    boundBoth: Boolean = true
 ) {
     val fsm = VolumeKeyStateMachine {
-        VolumeKeyStateMachine.Config(actionDelay, bypassDelay)
+        VolumeKeyStateMachine.Config(actionDelay, bypassDelay, boundUp, boundDown, boundBoth)
     }
     var now = 1_000L
         private set
@@ -277,6 +280,62 @@ class VolumeKeyStateMachineTest {
         // The gesture was given away, so the second press was never owned.
         f.effects += f.fsm.bypassNow(f.now).effects
         assertEquals(emptyList<Effect>(), f.takeEffects())
+    }
+
+    @Test
+    fun `a second press with no combo action hands both buttons over at once`() {
+        val f = Fixture(boundBoth = false)
+        assertTrue(f.down(VolumeButton.UP))
+        f.advance(40)
+        assertTrue(f.down(VolumeButton.DOWN))
+
+        assertEquals(
+            listOf(
+                Effect.InjectDown(VolumeButton.UP),
+                Effect.InjectDown(VolumeButton.DOWN)
+            ),
+            f.takeEffects()
+        )
+
+        // No action is left pending for either button.
+        f.advance(BYPASS_DELAY * 2)
+        assertEquals(emptyList<Effect>(), f.takeEffects())
+    }
+
+    @Test
+    fun `an unbound button is handed over at the action deadline`() {
+        val f = Fixture(boundUp = false)
+        f.down(VolumeButton.UP)
+
+        f.advanceTo(f.now + ACTION_DELAY - 1)
+        assertEquals(emptyList<Effect>(), f.takeEffects())
+
+        f.advance(1)
+        assertEquals(listOf(Effect.InjectDown(VolumeButton.UP)), f.takeEffects())
+    }
+
+    @Test
+    fun `an unbound button still waits for a combo partner`() {
+        val f = Fixture(boundUp = false)
+        f.down(VolumeButton.UP)
+        f.advance(40)
+        f.down(VolumeButton.DOWN)
+
+        // The combo is bound, so the gesture is still the module's.
+        assertEquals(emptyList<Effect>(), f.takeEffects())
+        f.advance(ACTION_DELAY)
+        assertEquals(listOf(Effect.RunAction(ActionTrigger.Both)), f.takeEffects())
+    }
+
+    @Test
+    fun `an unbound button is kept when the bypass is disabled`() {
+        val f = Fixture(bypassDelay = 0, boundUp = false)
+        f.down(VolumeButton.UP)
+        f.advance(BYPASS_DELAY * 2)
+
+        assertEquals(emptyList<Effect>(), f.takeEffects())
+        assertTrue(f.up(VolumeButton.UP))
+        assertEquals(listOf(Effect.AdjustVolume(VolumeButton.UP)), f.takeEffects())
     }
 
     @Test

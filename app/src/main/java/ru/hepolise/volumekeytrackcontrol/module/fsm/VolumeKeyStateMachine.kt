@@ -32,8 +32,20 @@ class VolumeKeyStateMachine(private val config: () -> Config) {
     data class Config(
         val actionDelayMs: Long,
         /** Zero disables the bypass: buttons then stay swallowed until released. */
-        val bypassDelayMs: Long
-    )
+        val bypassDelayMs: Long,
+        /**
+         * Whether each trigger has something to do. A trigger bound to nothing
+         * is handed back to the system as early as it can be told apart from
+         * one that still might act, instead of being held for the full bypass
+         * delay for no reason.
+         */
+        val boundUp: Boolean = true,
+        val boundDown: Boolean = true,
+        val boundBoth: Boolean = true
+    ) {
+        fun isBound(button: VolumeButton) =
+            if (button == VolumeButton.UP) boundUp else boundDown
+    }
 
     data class Outcome(
         /** True when the event must not reach the rest of the system. */
@@ -82,9 +94,16 @@ class VolumeKeyStateMachine(private val config: () -> Config) {
         }
         held[button] = Held(pressedAt = now)
         if (other != null) {
+            val config = config()
+            if (!config.boundBoth) {
+                // A second button means a combo, and there is no combo action.
+                // Nothing more can come of this gesture, so hand it over now
+                // rather than sit on the keys until the bypass deadline.
+                return Outcome(consume = true, effects = bypassNow(now).effects)
+            }
             // Combo: both single-button actions give way to one combined action,
             // timed from this second press.
-            comboAt = now + config().actionDelayMs
+            comboAt = now + config.actionDelayMs
         }
         return Outcome(consume = true)
     }
@@ -170,11 +189,25 @@ class VolumeKeyStateMachine(private val config: () -> Config) {
         comboAt?.let { timers += it to Timer.Combo }
         held.forEach { (button, state) ->
             if (!state.owned) return@forEach
-            if (comboAt == null && !state.actionFired && !state.actionCancelled) {
+            val actionPending = comboAt == null && config.isBound(button) &&
+                !state.actionFired && !state.actionCancelled
+            if (actionPending) {
                 timers += (state.pressedAt + config.actionDelayMs) to Timer.Action(button)
             }
             if (config.bypassDelayMs > 0) {
-                timers += (state.pressedAt + config.bypassDelayMs) to Timer.Bypass(button)
+                // An unbound button can only be waiting for a combo partner, and
+                // that partner would have arrived by the action deadline. Once
+                // the gesture has done something, the button waits like any
+                // other — handing one half of a held pair over on its own would
+                // leak a lone press to the system.
+                val waitsForNothing = comboAt == null && !config.isBound(button) &&
+                    !state.actionFired && !state.actionCancelled
+                val delay = if (waitsForNothing) {
+                    minOf(config.actionDelayMs, config.bypassDelayMs)
+                } else {
+                    config.bypassDelayMs
+                }
+                timers += (state.pressedAt + delay) to Timer.Bypass(button)
             }
         }
         return timers.sortedBy { it.first }
