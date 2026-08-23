@@ -123,7 +123,11 @@ class VolumeKeyHandler(
 
         if (!stateMachine.isActive && !armFor(isDown, button)) return false
 
-        if (isDown) pressedEvents[button] = KeyEvent(event)
+        if (isDown) {
+            pressedEvents[button] = KeyEvent(event)
+            // A gesture that grew to two buttons must not repeat, see startRepeats.
+            if (pressedEvents.size > 1) VolumeButton.entries.forEach(::stopRepeats)
+        }
 
         val outcome = stateMachine.onKey(button, isDown, SystemClock.uptimeMillis())
         verbose("$button ${if (isDown) "down" else "up"} -> consume=${outcome.consume}, effects=${outcome.effects}")
@@ -287,7 +291,7 @@ class VolumeKeyHandler(
                 logger("Failed to inject press for $button")
             }
         }
-        startRepeats(button, source, now)
+        if (pressedEvents.size == 1) startRepeats(button, source, now)
     }
 
     private fun injectUp(button: VolumeButton) {
@@ -307,6 +311,12 @@ class VolumeKeyHandler(
      * Keeps the handed-over press alive as a stream of repeats, the way the input
      * dispatcher would for a real key. Without it the press reads as a tap: no
      * volume ramping, and no long-press for anything downstream.
+     *
+     * Only ever for a single button. Firmware shortcuts that count how many times
+     * the two volume keys were pressed together read a repeat as another press —
+     * on HyperOS a two-button hold otherwise keeps re-triggering the log capture
+     * bound to "volume down and up three times". Nothing needs repeats to detect
+     * a chord anyway: those are recognised from the first press.
      */
     private fun startRepeats(button: VolumeButton, source: KeyEvent, downTime: Long) {
         stopRepeats(button)
