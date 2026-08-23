@@ -1,3 +1,4 @@
+Per-app configuration and some other features. Fully vibecoded and fully unreviewed
 # Volume Key Track Control Module
 
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Hepolise/VolumeKeyMusicManagerModule/build.yml)
