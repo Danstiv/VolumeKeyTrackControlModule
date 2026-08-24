@@ -43,6 +43,12 @@ sealed class MediaEvent {
 
     object FastForward : MediaEvent() {
         override fun execute(context: ExecutionContext) {
+            if (context.supports(PlaybackState.ACTION_FAST_FORWARD)) {
+                context.logger("Sending FastForward, the app decides how far")
+                context.controls.fastForward()
+                return
+            }
+
             val current = context.currentPosition()
             val duration = context.controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
                 ?: Long.MAX_VALUE
@@ -54,6 +60,12 @@ sealed class MediaEvent {
 
     object Rewind : MediaEvent() {
         override fun execute(context: ExecutionContext) {
+            if (context.supports(PlaybackState.ACTION_REWIND)) {
+                context.logger("Sending Rewind, the app decides how far")
+                context.controls.rewind()
+                return
+            }
+
             val current = context.currentPosition()
             val newPos = max(current - context.prefs.getRewindDuration() * 1000L, 0L)
             context.logger("Sending Rewind: $current -> $newPos")
@@ -61,6 +73,16 @@ sealed class MediaEvent {
         }
     }
 }
+
+/**
+ * Whether the session handles this action itself.
+ *
+ * An app that seeks on its own knows exactly where it is, which no amount of
+ * bookkeeping on this side can match — so it is asked to seek whenever it says
+ * it can, and the position below is only computed for the ones that cannot.
+ */
+private fun ExecutionContext.supports(action: Long): Boolean =
+    (controller.playbackState?.actions ?: 0L) and action != 0L
 
 /**
  * Where playback has actually reached.

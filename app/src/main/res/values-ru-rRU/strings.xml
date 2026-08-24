@@ -77,6 +77,7 @@
     <string name="delete_profile_message">Удалить профиль для %1$s? Приложение вернётся к общим действиям.</string>
     <string name="rewind_duration">Длительность перемотки: %d сек</string>
     <string name="rewind_duration_dialog_title">Установить длительность перемотки</string>
+    <string name="rewind_duration_hint">Приложения, умеющие перематывать сами, делают это своим шагом, а не этим.</string>
     <string name="edit_rewind_duration">Изменить длительность перемотки</string>
 
     <string name="settings_reset">Сбросить настройки</string>

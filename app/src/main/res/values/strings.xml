@@ -77,6 +77,7 @@
     <string name="delete_profile_message">Remove the profile for %1$s? It will fall back to the global actions.</string>
     <string name="rewind_duration">Rewind duration: %d sec</string>
     <string name="rewind_duration_dialog_title">Set rewind duration</string>
+    <string name="rewind_duration_hint">Apps able to seek on their own are asked to, and use their own step instead of this one.</string>
     <string name="edit_rewind_duration">Edit rewind duration</string>
 
     <string name="settings_reset">Reset settings</string>
