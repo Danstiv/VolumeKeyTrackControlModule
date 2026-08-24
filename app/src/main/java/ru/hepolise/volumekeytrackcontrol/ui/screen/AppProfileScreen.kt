@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -31,11 +33,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import ru.hepolise.volumekeytrackcontrol.R
 import ru.hepolise.volumekeytrackcontrol.ui.component.ActionSelector
+import ru.hepolise.volumekeytrackcontrol.ui.component.MediaKeySetting
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_DOWN
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.deleteProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getMediaKeyMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileAction
 
 /** Actions for one app, overriding the global configuration while it plays. */
@@ -49,6 +53,7 @@ fun AppProfileScreen(
     val context = LocalContext.current
     val label = remember(packageName) { context.appLabel(packageName) }
     var actionMap by remember { mutableStateOf(sharedPreferences.getActionMap(packageName)) }
+    var mediaKeyMap by remember { mutableStateOf(sharedPreferences.getMediaKeyMap(packageName)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -78,6 +83,7 @@ fun AppProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -111,6 +117,14 @@ fun AppProfileScreen(
                 actionMap = actionMap.copy(both = action)
                 sharedPreferences.setProfileAction(packageName, ACTION_BOTH_BUTTONS, action)
             }
+
+            MediaKeySetting(
+                mediaKeyMap = mediaKeyMap,
+                onValueChange = { mediaKeyMap = it },
+                onStore = { key, action ->
+                    sharedPreferences.setProfileAction(packageName, key, action)
+                }
+            )
         }
     }
 

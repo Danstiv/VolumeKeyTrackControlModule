@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -86,7 +87,9 @@ import ru.hepolise.volumekeytrackcontrol.ui.component.AppFilterSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.BypassSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.LongPressActionSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.LongPressSetting
+import ru.hepolise.volumekeytrackcontrol.ui.component.MediaKeySetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.ModuleInfoCard
+import ru.hepolise.volumekeytrackcontrol.ui.component.storeGlobalAction
 import ru.hepolise.volumekeytrackcontrol.ui.component.ActionSettingData
 import ru.hepolise.volumekeytrackcontrol.ui.component.VerboseLogSetting
 import ru.hepolise.volumekeytrackcontrol.ui.component.VibrationEffectSetting
@@ -99,6 +102,8 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.BYPASS_DURAT
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.IS_VERBOSE_LOG_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.LONG_PRESS_DURATION_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.ActionMap
+import ru.hepolise.volumekeytrackcontrol.util.MediaKeyMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_MEDIA_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_DOWN_DEFAULT_VALUE
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP_DEFAULT_VALUE
@@ -110,6 +115,7 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDur
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLaunchedCount
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLongPressDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getMediaKeyMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getSettingsSharedPreferences
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getStatusSharedPreferences
@@ -137,6 +143,7 @@ fun SettingsScreen(
 
     var longPressDuration by remember { mutableIntStateOf(settingsPrefs.getLongPressDuration()) }
     var actionMap by remember { mutableStateOf(settingsPrefs.getActionMap()) }
+    var mediaKeyMap by remember { mutableStateOf(settingsPrefs.getMediaKeyMap()) }
     var rewindDuration by remember { mutableIntStateOf(settingsPrefs.getRewindDuration()) }
     var bypassDuration by remember { mutableIntStateOf(settingsPrefs.getBypassDuration()) }
     var isVerboseLog by remember { mutableStateOf(settingsPrefs.isVerboseLog()) }
@@ -251,6 +258,17 @@ fun SettingsScreen(
                 }
 
                 SettingsCard(
+                    icon = Icons.Default.Headphones,
+                    title = stringResource(R.string.media_keys)
+                ) {
+                    MediaKeySetting(
+                        mediaKeyMap = mediaKeyMap,
+                        onValueChange = { mediaKeyMap = it },
+                        onStore = settingsPrefs::storeGlobalAction
+                    )
+                }
+
+                SettingsCard(
                     icon = Icons.Default.Vibration,
                     title = stringResource(R.string.vibration_settings)
                 ) {
@@ -309,6 +327,11 @@ fun SettingsScreen(
                                     up = ACTION_VOLUME_UP_DEFAULT_VALUE,
                                     down = ACTION_VOLUME_DOWN_DEFAULT_VALUE,
                                     both = ACTION_BOTH_BUTTONS_DEFAULT_VALUE
+                                )
+                                mediaKeyMap = MediaKeyMap(
+                                    next = ACTION_MEDIA_DEFAULT_VALUE,
+                                    previous = ACTION_MEDIA_DEFAULT_VALUE,
+                                    playPause = ACTION_MEDIA_DEFAULT_VALUE
                                 )
                                 rewindDuration = REWIND_DURATION_DEFAULT_VALUE
                                 bypassDuration = BYPASS_DURATION_DEFAULT_VALUE

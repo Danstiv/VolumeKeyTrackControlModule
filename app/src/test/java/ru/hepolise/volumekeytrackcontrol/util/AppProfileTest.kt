@@ -2,7 +2,9 @@ package ru.hepolise.volumekeytrackcontrol.util
 
 import androidx.core.content.edit
 import org.junit.Assert.assertEquals
+import android.view.KeyEvent
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS
@@ -10,7 +12,9 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUM
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.createProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.deleteProfile
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_MEDIA_PREVIOUS
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getMediaKeyMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getProfileApps
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.hasProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileAction
@@ -109,5 +113,44 @@ class AppProfileTest {
         // Re-creating must not resurrect the deleted override.
         prefs.createProfile(SPOTIFY)
         assertEquals(KeyAction.NEXT, prefs.getActionMap(SPOTIFY).up)
+    }
+
+    @Test
+    fun `headset buttons are unset until configured, per app`() {
+        // Nothing bound anywhere: every button reaches the app untouched.
+        assertEquals(
+            MediaKeyMap(KeyAction.NONE, KeyAction.NONE, KeyAction.NONE),
+            prefs.getMediaKeyMap(SPOTIFY)
+        )
+
+        prefs.createProfile(SPOTIFY)
+        prefs.setProfileAction(SPOTIFY, ACTION_MEDIA_PREVIOUS, KeyAction.SEEK_BACKWARD)
+
+        assertEquals(KeyAction.SEEK_BACKWARD, prefs.getMediaKeyMap(SPOTIFY).previous)
+        assertEquals(KeyAction.NONE, prefs.getMediaKeyMap(SPOTIFY).next)
+        assertEquals(KeyAction.NONE, prefs.getMediaKeyMap(PODCASTS).previous)
+        assertEquals(KeyAction.NONE, prefs.getMediaKeyMap().previous)
+
+        prefs.deleteProfile(SPOTIFY)
+        assertEquals(KeyAction.NONE, prefs.getMediaKeyMap(SPOTIFY).previous)
+    }
+
+    @Test
+    fun `every action maps to the media key that means it`() {
+        assertEquals(KeyEvent.KEYCODE_MEDIA_REWIND, KeyAction.SEEK_BACKWARD.mediaKeyCode)
+        assertEquals(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyAction.SEEK_FORWARD.mediaKeyCode)
+        assertEquals(KeyEvent.KEYCODE_MEDIA_NEXT, KeyAction.NEXT.mediaKeyCode)
+        assertEquals(KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyAction.PREVIOUS.mediaKeyCode)
+        assertEquals(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyAction.PLAY_PAUSE.mediaKeyCode)
+        assertNull(KeyAction.NONE.mediaKeyCode)
+    }
+
+    @Test
+    fun `both play and pause count as the play-pause button`() {
+        assertEquals(MediaKey.PLAY_PAUSE, MediaKeyMap.keyOf(KeyEvent.KEYCODE_MEDIA_PLAY))
+        assertEquals(MediaKey.PLAY_PAUSE, MediaKeyMap.keyOf(KeyEvent.KEYCODE_MEDIA_PAUSE))
+        assertEquals(MediaKey.PLAY_PAUSE, MediaKeyMap.keyOf(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+        assertEquals(MediaKey.NEXT, MediaKeyMap.keyOf(KeyEvent.KEYCODE_MEDIA_NEXT))
+        assertNull(MediaKeyMap.keyOf(KeyEvent.KEYCODE_VOLUME_UP))
     }
 }

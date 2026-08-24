@@ -70,6 +70,12 @@
     <string name="action_seek_forward">Перемотка вперёд</string>
     <string name="action_seek_backward">Перемотка назад</string>
 
+    <string name="media_keys">Кнопки гарнитуры</string>
+    <string name="media_keys_hint">Действует только для Bluetooth-гарнитуры и только там, где задано — незаданная кнопка доходит до приложения как есть.</string>
+    <string name="action_media_next">Следующий:</string>
+    <string name="action_media_previous">Предыдущий:</string>
+    <string name="action_media_play_pause">Воспроизведение / пауза:</string>
+
     <string name="app_profiles">Действия по приложениям</string>
     <string name="app_profiles_empty">Приложения не настроены. Добавьте приложение, чтобы задать ему свои действия; для остальных действуют настройки выше.</string>
     <string name="add_app">Добавить приложение</string>

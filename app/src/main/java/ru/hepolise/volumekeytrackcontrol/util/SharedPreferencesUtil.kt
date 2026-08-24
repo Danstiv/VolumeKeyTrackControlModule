@@ -19,6 +19,9 @@ object SharedPreferencesUtil {
     const val ACTION_VOLUME_UP = "actionVolumeUp"
     const val ACTION_VOLUME_DOWN = "actionVolumeDown"
     const val ACTION_BOTH_BUTTONS = "actionBothButtons"
+    const val ACTION_MEDIA_NEXT = "actionMediaNext"
+    const val ACTION_MEDIA_PREVIOUS = "actionMediaPrevious"
+    const val ACTION_MEDIA_PLAY_PAUSE = "actionMediaPlayPause"
     const val REWIND_DURATION = "rewindDuration"
     const val BYPASS_DURATION = "bypassDuration"
     const val IS_VERBOSE_LOG = "isVerboseLog"
@@ -37,6 +40,9 @@ object SharedPreferencesUtil {
     val ACTION_VOLUME_UP_DEFAULT_VALUE = KeyAction.NEXT
     val ACTION_VOLUME_DOWN_DEFAULT_VALUE = KeyAction.PREVIOUS
     val ACTION_BOTH_BUTTONS_DEFAULT_VALUE = KeyAction.PLAY_PAUSE
+    // Unset by default: a headset button no one reconfigured must keep working
+    // exactly as the app expects.
+    val ACTION_MEDIA_DEFAULT_VALUE = KeyAction.NONE
     const val REWIND_DURATION_DEFAULT_VALUE = 5
     // Kept below two seconds on purpose: the window manager's own volume chord
     // needs three more seconds after the module hands the keys over, and it has
@@ -100,6 +106,22 @@ object SharedPreferencesUtil {
         )
     }
 
+    /** What the headset buttons do for [packageName], falling back to the global map. */
+    fun SharedPreferences?.getMediaKeyMap(packageName: String? = null): MediaKeyMap {
+        val global = MediaKeyMap(
+            next = getAction(ACTION_MEDIA_NEXT, ACTION_MEDIA_DEFAULT_VALUE),
+            previous = getAction(ACTION_MEDIA_PREVIOUS, ACTION_MEDIA_DEFAULT_VALUE),
+            playPause = getAction(ACTION_MEDIA_PLAY_PAUSE, ACTION_MEDIA_DEFAULT_VALUE)
+        )
+        if (packageName == null || !hasProfile(packageName)) return global
+
+        return MediaKeyMap(
+            next = getAction(profileKey(packageName, ACTION_MEDIA_NEXT), global.next),
+            previous = getAction(profileKey(packageName, ACTION_MEDIA_PREVIOUS), global.previous),
+            playPause = getAction(profileKey(packageName, ACTION_MEDIA_PLAY_PAUSE), global.playPause)
+        )
+    }
+
     /** Seeds a profile from the global configuration so every slot starts defined. */
     fun SharedPreferences.createProfile(packageName: String) {
         val global = getActionMap()
@@ -121,6 +143,9 @@ object SharedPreferencesUtil {
             remove(profileKey(packageName, ACTION_VOLUME_UP))
             remove(profileKey(packageName, ACTION_VOLUME_DOWN))
             remove(profileKey(packageName, ACTION_BOTH_BUTTONS))
+            remove(profileKey(packageName, ACTION_MEDIA_NEXT))
+            remove(profileKey(packageName, ACTION_MEDIA_PREVIOUS))
+            remove(profileKey(packageName, ACTION_MEDIA_PLAY_PAUSE))
         }
     }
 

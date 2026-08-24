@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import ru.hepolise.volumekeytrackcontrol.module.util.MediaKeyHandler
 import ru.hepolise.volumekeytrackcontrol.module.util.MediaSessionManager
 import ru.hepolise.volumekeytrackcontrol.module.util.VolumeKeyHandler
 import ru.hepolise.volumekeytrackcontrol.module.util.getContext
@@ -20,11 +21,19 @@ class VolumeControlModule : XposedModule() {
 
         private const val CLASS_PHONE_WINDOW_MANAGER =
             "com.android.server.policy.PhoneWindowManager"
+
+        private const val CLASS_MEDIA_SESSION_RECORD =
+            "com.android.server.media.MediaSessionRecord"
+
+        private const val METHOD_INTERCEPT_KEY = "interceptKeyBeforeQueueing"
+        private const val METHOD_SEND_MEDIA_BUTTON = "sendMediaButton"
     }
 
     private lateinit var prefs: android.content.SharedPreferences
 
     private var interceptHookHandle: XposedInterface.HookHandle? = null
+    private var mediaButtonHookHandle: XposedInterface.HookHandle? = null
+    private var mediaKeyHandler: MediaKeyHandler? = null
 
     private data class Runtime(
         val context: Context,
@@ -60,18 +69,25 @@ class VolumeControlModule : XposedModule() {
     override fun onHotReloaded(param: XposedModuleInterface.HotReloadedParam) {
         log("onHotReloaded: ${param.processName}, ${param.oldHookHandles.size} old hooks")
 
+        prefs = getRemotePreferences(SETTINGS_PREFS)
+        mediaKeyHandler = MediaKeyHandler(prefs, ::log)
+
         for (oldHandle in param.oldHookHandles) {
-            val executable = oldHandle.executable
-            if (executable.name == "interceptKeyBeforeQueueing") {
-                val newHooker = createInterceptHooker()
-                interceptHookHandle = oldHandle.replaceHook(newHooker)
-                log("Replaced interceptKeyBeforeQueueing hook")
-            } else {
-                oldHandle.unhook()
+            when (oldHandle.executable.name) {
+                METHOD_INTERCEPT_KEY -> {
+                    interceptHookHandle = oldHandle.replaceHook(createInterceptHooker())
+                    log("Replaced $METHOD_INTERCEPT_KEY hook")
+                }
+
+                METHOD_SEND_MEDIA_BUTTON -> {
+                    mediaButtonHookHandle = oldHandle.replaceHook(createMediaButtonHooker())
+                    log("Replaced $METHOD_SEND_MEDIA_BUTTON hook")
+                }
+
+                else -> oldHandle.unhook()
             }
         }
 
-        prefs = getRemotePreferences(SETTINGS_PREFS)
         // Drop the cached runtime so the handler picks up the new preferences.
         runtime = null
     }
@@ -80,9 +96,66 @@ class VolumeControlModule : XposedModule() {
         log("Setting up hooks")
 
         prefs = getRemotePreferences(SETTINGS_PREFS)
+        mediaKeyHandler = MediaKeyHandler(prefs, ::log)
 
         interceptHookHandle = hookInterceptKeyBeforeQueueing(classLoader)
+        mediaButtonHookHandle = hookSendMediaButton(classLoader)
     }
+
+    /**
+     * Optional: remapping headset buttons is a separate feature, and the method
+     * behind it is internal enough that its shape can differ between releases.
+     * A failure here is logged and leaves the rest of the module working.
+     */
+    @SuppressLint("PrivateApi")
+    private fun hookSendMediaButton(classLoader: ClassLoader): XposedInterface.HookHandle? {
+        return try {
+            val clazz = Class.forName(CLASS_MEDIA_SESSION_RECORD, true, classLoader)
+            val method = clazz.declaredMethods.firstOrNull { candidate ->
+                candidate.name == METHOD_SEND_MEDIA_BUTTON &&
+                    candidate.parameterTypes.any { it == KeyEvent::class.java }
+            }
+            if (method == null) {
+                val names = clazz.declaredMethods.map { it.name }.distinct()
+                log("No $METHOD_SEND_MEDIA_BUTTON taking a KeyEvent; methods: $names")
+                return null
+            }
+
+            val handle = hook(method).intercept(createMediaButtonHooker())
+            log("Hooked $METHOD_SEND_MEDIA_BUTTON(${method.parameterTypes.joinToString { it.simpleName }})")
+            handle
+        } catch (t: Throwable) {
+            log("Failed to hook $METHOD_SEND_MEDIA_BUTTON: ${t.message}")
+            null
+        }
+    }
+
+    private fun createMediaButtonHooker(): XposedInterface.Hooker {
+        return XposedInterface.Hooker { chain ->
+            try {
+                val args = chain.args
+                val eventIndex = args.indexOfFirst { it is KeyEvent }
+                val event = args.getOrNull(eventIndex) as? KeyEvent
+                val caller = args.firstOrNull { it is String } as? String
+                val target = chain.thisObject?.callPackageName()
+
+                val remapped = event?.let { mediaKeyHandler?.remap(target, caller, it) }
+                if (remapped != null) {
+                    val newArgs = args.toTypedArray()
+                    newArgs[eventIndex] = remapped
+                    return@Hooker chain.proceed(newArgs)
+                }
+            } catch (e: Throwable) {
+                log("Error remapping media button: ${e.message}")
+            }
+
+            chain.proceed()
+        }
+    }
+
+    private fun Any.callPackageName(): String? = runCatching {
+        javaClass.getMethod("getPackageName").invoke(this) as? String
+    }.getOrNull()
 
     @SuppressLint("PrivateApi")
     private fun hookInterceptKeyBeforeQueueing(classLoader: ClassLoader): XposedInterface.HookHandle? {
