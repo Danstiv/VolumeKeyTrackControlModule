@@ -35,7 +35,16 @@ class VolumeControlModule : XposedModule() {
 
     private var runtime: Runtime? = null
 
-    private fun log(msg: String) = log(Log.INFO, TAG, msg)
+    /**
+     * Mirrored into logcat as well as the framework log: the manager's module
+     * log has been seen empty for every installed module, and losing the output
+     * of a module that only misbehaves on a device is worse than a few extra
+     * logcat lines. `adb logcat -s VolumeControl` then shows everything.
+     */
+    private fun log(msg: String) {
+        Log.i(TAG, msg)
+        log(Log.INFO, TAG, msg)
+    }
 
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
         super.onSystemServerStarting(param)
@@ -44,16 +53,12 @@ class VolumeControlModule : XposedModule() {
     }
 
     override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean {
-        log(Log.INFO, TAG, "onHotReloading")
+        log("onHotReloading")
         return interceptHookHandle != null
     }
 
     override fun onHotReloaded(param: XposedModuleInterface.HotReloadedParam) {
-        log(
-            Log.INFO,
-            TAG,
-            "onHotReloaded: ${param.processName}, ${param.oldHookHandles.size} old hooks"
-        )
+        log("onHotReloaded: ${param.processName}, ${param.oldHookHandles.size} old hooks")
 
         for (oldHandle in param.oldHookHandles) {
             val executable = oldHandle.executable
