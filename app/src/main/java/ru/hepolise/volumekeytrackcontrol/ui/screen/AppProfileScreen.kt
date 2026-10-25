@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,12 +35,18 @@ import androidx.navigation.NavController
 import ru.hepolise.volumekeytrackcontrol.R
 import ru.hepolise.volumekeytrackcontrol.ui.component.ActionSelector
 import ru.hepolise.volumekeytrackcontrol.ui.component.MediaKeySetting
+import ru.hepolise.volumekeytrackcontrol.ui.component.SeekModeSetting
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_BOTH_BUTTONS
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_DOWN
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUME_UP
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.deleteProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getMediaKeyMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getProfileSeekStep
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindDuration
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isCustomSeek
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setCustomSeek
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileSeekStep
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileAction
 
 /** Actions for one app, overriding the global configuration while it plays. */
@@ -54,6 +61,8 @@ fun AppProfileScreen(
     val label = remember(packageName) { context.appLabel(packageName) }
     var actionMap by remember { mutableStateOf(sharedPreferences.getActionMap(packageName)) }
     var mediaKeyMap by remember { mutableStateOf(sharedPreferences.getMediaKeyMap(packageName)) }
+    var customSeek by remember { mutableStateOf(sharedPreferences.isCustomSeek(packageName)) }
+    var seekStep by remember { mutableIntStateOf(sharedPreferences.getProfileSeekStep(packageName)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -116,6 +125,22 @@ fun AppProfileScreen(
             ) { action ->
                 actionMap = actionMap.copy(both = action)
                 sharedPreferences.setProfileAction(packageName, ACTION_BOTH_BUTTONS, action)
+            }
+
+            if (actionMap.usesSeekDuration) {
+                SeekModeSetting(
+                    custom = customSeek,
+                    step = seekStep,
+                    globalStep = sharedPreferences.getRewindDuration(),
+                    onCustomChange = {
+                        customSeek = it
+                        sharedPreferences.setCustomSeek(packageName, it)
+                    },
+                    onStepChange = {
+                        seekStep = it
+                        sharedPreferences.setProfileSeekStep(packageName, it)
+                    }
+                )
             }
 
             MediaKeySetting(

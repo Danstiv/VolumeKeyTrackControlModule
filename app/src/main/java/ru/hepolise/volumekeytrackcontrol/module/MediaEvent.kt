@@ -56,37 +56,47 @@ sealed class MediaEvent {
         }
     }
 
-    object FastForward : MediaEvent() {
+    /** [customStep] seconds, when set, are seeked by even if the app could seek itself. */
+    data class FastForward(val customStep: Int?) : MediaEvent() {
         override fun execute(context: ExecutionContext) {
-            if (context.supports(PlaybackState.ACTION_FAST_FORWARD)) {
+            if (customStep == null && context.supports(PlaybackState.ACTION_FAST_FORWARD)) {
                 context.logger("Sending FastForward, the app decides how far")
                 context.controls.fastForward()
                 return
             }
 
+            val step = customStep ?: context.prefs.getRewindDuration()
             val current = context.currentPosition()
             val duration = context.controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
                 ?: Long.MAX_VALUE
-            val newPos = min(current + context.prefs.getRewindDuration() * 1000L, duration)
-            context.logger("Sending FastForward: $current -> $newPos")
-            context.controls.seekTo(newPos)
+            val newPos = min(current + step * 1000L, duration)
+            context.seekTo("FastForward", current, newPos)
         }
     }
 
-    object Rewind : MediaEvent() {
+    /** [customStep] seconds, when set, are seeked by even if the app could seek itself. */
+    data class Rewind(val customStep: Int?) : MediaEvent() {
         override fun execute(context: ExecutionContext) {
-            if (context.supports(PlaybackState.ACTION_REWIND)) {
+            if (customStep == null && context.supports(PlaybackState.ACTION_REWIND)) {
                 context.logger("Sending Rewind, the app decides how far")
                 context.controls.rewind()
                 return
             }
 
+            val step = customStep ?: context.prefs.getRewindDuration()
             val current = context.currentPosition()
-            val newPos = max(current - context.prefs.getRewindDuration() * 1000L, 0L)
-            context.logger("Sending Rewind: $current -> $newPos")
-            context.controls.seekTo(newPos)
+            val newPos = max(current - step * 1000L, 0L)
+            context.seekTo("Rewind", current, newPos)
         }
     }
+}
+
+private fun ExecutionContext.seekTo(name: String, current: Long, newPos: Long) {
+    if (!supports(PlaybackState.ACTION_SEEK_TO)) {
+        logger("$name: the session does not declare ACTION_SEEK_TO, it may ignore the seek")
+    }
+    logger("Sending $name: $current -> $newPos")
+    controls.seekTo(newPos)
 }
 
 /**

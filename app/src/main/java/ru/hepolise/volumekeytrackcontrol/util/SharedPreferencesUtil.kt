@@ -23,6 +23,8 @@ object SharedPreferencesUtil {
     const val ACTION_MEDIA_PREVIOUS = "actionMediaPrevious"
     const val ACTION_MEDIA_PLAY_PAUSE = "actionMediaPlayPause"
     const val REWIND_DURATION = "rewindDuration"
+    const val CUSTOM_SEEK = "customSeek"
+    const val CUSTOM_SEEK_STEP = "customSeekStep"
     const val BYPASS_DURATION = "bypassDuration"
     const val IS_VERBOSE_LOG = "isVerboseLog"
     const val PROFILE_APPS = "profileApps"
@@ -146,12 +148,43 @@ object SharedPreferencesUtil {
             remove(profileKey(packageName, ACTION_MEDIA_NEXT))
             remove(profileKey(packageName, ACTION_MEDIA_PREVIOUS))
             remove(profileKey(packageName, ACTION_MEDIA_PLAY_PAUSE))
+            remove(profileKey(packageName, CUSTOM_SEEK))
+            remove(profileKey(packageName, CUSTOM_SEEK_STEP))
         }
     }
 
     fun SharedPreferences?.getRewindDuration(): Int {
         val defaultValue = REWIND_DURATION_DEFAULT_VALUE
         return this?.getInt(REWIND_DURATION, defaultValue) ?: defaultValue
+    }
+
+    /**
+     * Seconds the volume keys seek by in [packageName] regardless of what the app
+     * can do itself, or null to let the app seek its own way. The step is kept
+     * while the mode is off, so switching back restores it.
+     */
+    fun SharedPreferences?.getCustomSeekStep(packageName: String?): Int? {
+        if (packageName == null || !hasProfile(packageName) || !isCustomSeek(packageName)) {
+            return null
+        }
+        return getProfileSeekStep(packageName)
+    }
+
+    fun SharedPreferences?.isCustomSeek(packageName: String): Boolean =
+        this?.getBoolean(profileKey(packageName, CUSTOM_SEEK), false) ?: false
+
+    /** The stored custom step, starting from the global one until set. */
+    fun SharedPreferences?.getProfileSeekStep(packageName: String): Int {
+        val defaultValue = getRewindDuration()
+        return this?.getInt(profileKey(packageName, CUSTOM_SEEK_STEP), defaultValue) ?: defaultValue
+    }
+
+    fun SharedPreferences.setCustomSeek(packageName: String, enabled: Boolean) {
+        edit { putBoolean(profileKey(packageName, CUSTOM_SEEK), enabled) }
+    }
+
+    fun SharedPreferences.setProfileSeekStep(packageName: String, seconds: Int) {
+        edit { putInt(profileKey(packageName, CUSTOM_SEEK_STEP), seconds) }
     }
 
     /** Milliseconds a button is held before the gesture is handed to the system. */

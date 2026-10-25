@@ -13,11 +13,15 @@ import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_VOLUM
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.createProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.deleteProfile
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.ACTION_MEDIA_PREVIOUS
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.REWIND_DURATION
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getCustomSeekStep
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getMediaKeyMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getProfileApps
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.hasProfile
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setCustomSeek
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileAction
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.setProfileSeekStep
 
 private const val SPOTIFY = "com.spotify.music"
 private const val PODCASTS = "com.podcasts.app"
@@ -133,6 +137,35 @@ class AppProfileTest {
 
         prefs.deleteProfile(SPOTIFY)
         assertEquals(KeyAction.NONE, prefs.getMediaKeyMap(SPOTIFY).previous)
+    }
+
+    @Test
+    fun `a custom seek step applies only while switched on in a profile`() {
+        prefs.edit { putInt(REWIND_DURATION, 7) }
+        assertNull(prefs.getCustomSeekStep(SPOTIFY))
+        assertNull(prefs.getCustomSeekStep(null))
+
+        prefs.createProfile(SPOTIFY)
+        assertNull(prefs.getCustomSeekStep(SPOTIFY))
+
+        // Starts from the global step until one is set.
+        prefs.setCustomSeek(SPOTIFY, true)
+        assertEquals(7, prefs.getCustomSeekStep(SPOTIFY))
+
+        prefs.setProfileSeekStep(SPOTIFY, 30)
+        assertEquals(30, prefs.getCustomSeekStep(SPOTIFY))
+        assertNull(prefs.getCustomSeekStep(PODCASTS))
+
+        // Switching off and on again keeps the step.
+        prefs.setCustomSeek(SPOTIFY, false)
+        assertNull(prefs.getCustomSeekStep(SPOTIFY))
+        prefs.setCustomSeek(SPOTIFY, true)
+        assertEquals(30, prefs.getCustomSeekStep(SPOTIFY))
+
+        // Re-creating a deleted profile must not resurrect it.
+        prefs.deleteProfile(SPOTIFY)
+        prefs.createProfile(SPOTIFY)
+        assertNull(prefs.getCustomSeekStep(SPOTIFY))
     }
 
     @Test

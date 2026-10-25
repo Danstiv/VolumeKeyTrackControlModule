@@ -85,6 +85,13 @@
     <string name="rewind_duration_dialog_title">Установить длительность перемотки</string>
     <string name="rewind_duration_hint">Приложения, умеющие перематывать сами, делают это своим шагом, а не этим.</string>
     <string name="edit_rewind_duration">Изменить длительность перемотки</string>
+    <string name="seek_mode">Шаг перемотки:</string>
+    <string name="seek_mode_default">По умолчанию</string>
+    <string name="seek_mode_custom">Свой</string>
+    <string name="seek_mode_default_hint">Приложение перематывает своим шагом; если не умеет — на %d сек из общих настроек.</string>
+    <string name="seek_mode_custom_hint">Всегда перематывает на этот шаг, даже если приложение умеет перематывать само.</string>
+    <string name="seek_step">Шаг: %d сек</string>
+    <string name="edit_seek_step">Изменить шаг перемотки</string>
 
     <string name="settings_reset">Сбросить настройки</string>
     <string name="settings_reset_message">Вы уверены, что хотите сбросить настройки?</string>

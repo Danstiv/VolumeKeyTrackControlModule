@@ -85,6 +85,13 @@
     <string name="rewind_duration_dialog_title">Set rewind duration</string>
     <string name="rewind_duration_hint">Apps able to seek on their own are asked to, and use their own step instead of this one.</string>
     <string name="edit_rewind_duration">Edit rewind duration</string>
+    <string name="seek_mode">Seek step:</string>
+    <string name="seek_mode_default">Default</string>
+    <string name="seek_mode_custom">Custom</string>
+    <string name="seek_mode_default_hint">The app seeks its own way; if it cannot, by %d sec from the global settings.</string>
+    <string name="seek_mode_custom_hint">Always seeks by this step, even if the app could seek itself.</string>
+    <string name="seek_step">Step: %d sec</string>
+    <string name="edit_seek_step">Edit seek step</string>
 
     <string name="settings_reset">Reset settings</string>
     <string name="settings_reset_message">Are you sure you want to reset settings?</string>

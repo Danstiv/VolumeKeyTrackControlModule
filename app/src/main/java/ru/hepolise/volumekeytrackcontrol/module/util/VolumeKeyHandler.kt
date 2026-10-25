@@ -17,6 +17,7 @@ import ru.hepolise.volumekeytrackcontrol.util.ActionMap
 import ru.hepolise.volumekeytrackcontrol.util.KeyAction
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getActionMap
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getBypassDuration
+import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getCustomSeekStep
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getLongPressDuration
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.isVerboseLog
 import ru.hepolise.volumekeytrackcontrol.util.VibratorUtil.getVibrator
@@ -50,12 +51,13 @@ class VolumeKeyHandler(
     }
 
     /**
-     * Media session picked when the gesture started, and the actions configured
-     * for the app owning it. Both are held for the whole gesture, so a session
-     * appearing or a setting changing mid-press cannot alter it.
+     * Media session picked when the gesture started, and the actions and seek
+     * step configured for the app owning it. All are held for the whole gesture,
+     * so a session appearing or a setting changing mid-press cannot alter it.
      */
     private var gestureController: MediaController? = null
     private var gestureActionMap: ActionMap? = null
+    private var gestureSeekStep: Int? = null
 
     /** Real presses kept around so injected events can mimic the same device. */
     private val pressedEvents = mutableMapOf<VolumeButton, KeyEvent>()
@@ -195,12 +197,14 @@ class VolumeKeyHandler(
         logger("Gesture started, controller: ${controller.packageName}, actions: $actionMap")
         gestureController = controller
         gestureActionMap = actionMap
+        gestureSeekStep = prefs.getCustomSeekStep(controller.packageName)
         return true
     }
 
     private fun endGesture() {
         gestureController = null
         gestureActionMap = null
+        gestureSeekStep = null
         pressedEvents.clear()
         injectedDownTimes.clear()
         VolumeButton.entries.forEach(::stopRepeats)
@@ -275,8 +279,8 @@ class VolumeKeyHandler(
             KeyAction.PLAY_PAUSE -> MediaEvent.PlayPause
             KeyAction.NEXT -> MediaEvent.Next
             KeyAction.PREVIOUS -> MediaEvent.Prev
-            KeyAction.SEEK_FORWARD -> MediaEvent.FastForward
-            KeyAction.SEEK_BACKWARD -> MediaEvent.Rewind
+            KeyAction.SEEK_FORWARD -> MediaEvent.FastForward(gestureSeekStep)
+            KeyAction.SEEK_BACKWARD -> MediaEvent.Rewind(gestureSeekStep)
         }
 
     private fun injectDown(button: VolumeButton) {
