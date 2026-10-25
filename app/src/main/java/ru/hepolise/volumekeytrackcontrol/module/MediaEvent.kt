@@ -5,6 +5,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.os.SystemClock
+import android.view.KeyEvent
 import ru.hepolise.volumekeytrackcontrol.util.SharedPreferencesUtil.getRewindDuration
 import kotlin.math.max
 import kotlin.math.min
@@ -16,14 +17,28 @@ import kotlin.math.min
 sealed class MediaEvent {
     abstract fun execute(context: ExecutionContext)
 
+    /**
+     * Sent as a button press rather than through the transport controls: some
+     * apps (TeamTalk toggling voice transmission, for one) only handle
+     * [MediaController.dispatchMediaButtonEvent] and leave onPlay/onPause empty.
+     * Separate play and pause keys, because the default session handler holds
+     * back KEYCODE_MEDIA_PLAY_PAUSE waiting for a possible double tap.
+     */
     object PlayPause : MediaEvent() {
         override fun execute(context: ExecutionContext) {
-            context.logger("Sending PlayPause")
-            if (context.controller.isMusicActive()) {
-                context.controls.pause()
+            val keyCode = if (context.controller.isMusicActive()) {
+                KeyEvent.KEYCODE_MEDIA_PAUSE
             } else {
-                context.controls.play()
+                KeyEvent.KEYCODE_MEDIA_PLAY
             }
+            context.logger("Sending PlayPause as ${KeyEvent.keyCodeToString(keyCode)}")
+            val now = SystemClock.uptimeMillis()
+            context.controller.dispatchMediaButtonEvent(
+                KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0)
+            )
+            context.controller.dispatchMediaButtonEvent(
+                KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0)
+            )
         }
     }
 
