@@ -35,8 +35,6 @@ for vol in "$VOL_SDK" "$VOL_GRADLE" "$VOL_OUT"; do
     fi
 done
 
-# The sandbox reaches the network directly; the host proxy variables point at an
-# address the container cannot resolve, so they are explicitly cleared.
 docker_run() {
     docker run --rm -i \
         ${TTY_FLAG:-} \
@@ -44,8 +42,6 @@ docker_run() {
         -v "$VOL_SDK:/opt/android-sdk" \
         -v "$VOL_GRADLE:/home/builder/.gradle" \
         -v "$VOL_OUT:/out" \
-        -e HTTP_PROXY= -e HTTPS_PROXY= -e http_proxy= -e https_proxy= \
-        -e JAVA_TOOL_OPTIONS= \
         -w /workspace \
         "$IMAGE" "$@"
 }
